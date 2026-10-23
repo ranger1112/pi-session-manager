@@ -24,17 +24,18 @@ export async function browseSessions(args: string, ctx: ExtensionCommandContext)
   const currentPath = ctx.sessionManager.getSessionFile();
   const sessionDir = ctx.sessionManager.getSessionDir();
   const settings = new Set(args.trim().split(/\s+/));
-  const target = await ctx.ui.custom<string | undefined>((tui, theme, _kb, done) => createPicker({
+  const target = await ctx.ui.custom<string | undefined>((tui, theme, keybindings, done) => createPicker({
     primitives: { Input, SelectList, matchesKey, truncateToWidth },
-    theme, requestRender: () => tui.requestRender(), done,
+    theme, keybindings, requestRender: () => tui.requestRender(), done,
     scope: settings.has('all') ? 'all' : 'current',
     showAgents: settings.has('agents'), currentPath,
     visibleRows: () => Math.max(1, Math.min(12, (tui.terminal?.rows ?? 24) - 10)),
-    load: async (scope: string, signal: AbortSignal, progress: (text: string) => void) => {
+    load: async (scope: string, signal: AbortSignal, progress: (text: string) => void,
+      diagnostics: (result: { unreadable: number }) => void) => {
       // 自定义 sessionDir 的“全部”只在该存储内搜索，不意外切回全局默认目录。
       return store.list({
         ...sessionStorage({ agentDir: getAgentDir(), cwd: ctx.cwd, sessionDir, scope }),
-        signal, onProgress: progress,
+        signal, onProgress: progress, onDiagnostics: diagnostics,
       });
     },
   }));

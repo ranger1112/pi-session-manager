@@ -86,6 +86,35 @@ test('路径与第一条消息可搜索，输出标题移除控制字符并回�
   assert.equal(sessions.sessionTitle(item('/hello.jsonl', { name: '', firstMessage: '' })), 'hello');
 });
 
+test('消息计数只统计合法顶层消息，忽略嵌套字段、坏行和非对象 JSON', async () => {
+  await fixture(async file => {
+    const path = await file('count', [header('count'),
+      { type: 'message', message: { role: 'user', content: '首条消息' } },
+      { type: 'custom', data: { type: 'message' } },
+      { type: 'message', message: { role: 'assistant', content: [] } },
+      null, [], 'message', 123,
+    ]);
+    await writeFile(path, 'invalid {"type":"message"}\n{"type":"message",}\n', { flag: 'a' });
+    const evidence = await sessions.readEvidence(path);
+    assert.equal(evidence.messageCount, 2);
+    assert.equal(evidence.firstMessage, '首条消息');
+  });
+});
+
+test('合法转义类型和大型工具结果正常计数，正文不保留在提取结果中', async () => {
+  await fixture(async file => {
+    const path = await file('large', [header('large'),
+      { type: 'message', message: { role: 'toolResult', toolName: 'read',
+        content: [{ type: 'text', text: 'x'.repeat(128 * 1024) }] } },
+    ]);
+    await writeFile(path, '{"type":"mess\\u0061ge","message":{"role":"user","content":"转义消息"}}\n', { flag: 'a' });
+    const evidence = await sessions.readEvidence(path);
+    assert.equal(evidence.messageCount, 2);
+    assert.equal(evidence.firstMessage, '转义消息');
+    assert.ok(JSON.stringify(evidence).length < 1024);
+  });
+});
+
 test('取消分类立即中断，不把取消当作无法读取', async () => {
   const controller = new AbortController();
   controller.abort();

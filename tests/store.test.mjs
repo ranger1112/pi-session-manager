@@ -38,3 +38,22 @@ test('一次读取提取列表与分类证据，重复加载复用缓存，文�
     await assert.rejects(store.list({ directory: join(root, 'missing') }), /ENOENT/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+test('返回列表保持数组接口，同时提供最终不可读统计，修复文件后统计清零', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pi-session-store-'));
+  try {
+    const valid = join(root, 'valid.jsonl'), broken = join(root, 'broken.jsonl');
+    const header = JSON.stringify({ type: 'session', id: 'valid', cwd: '/project' }) + '\n';
+    await writeFile(valid, header);
+    await writeFile(broken, 'broken JSON\n');
+    const store = createSessionStore(), diagnostics = [];
+    const list = () => store.list({ directory: root, onDiagnostics: value => diagnostics.push(value) });
+    const result = await list();
+    assert.equal(Array.isArray(result), true);
+    assert.equal(result.length, 1);
+    assert.deepEqual(diagnostics, [{ unreadable: 1 }]);
+    await writeFile(broken, header);
+    assert.equal((await list()).length, 2);
+    assert.deepEqual(diagnostics.at(-1), { unreadable: 0 });
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

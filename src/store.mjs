@@ -36,7 +36,7 @@ export function createSessionStore() {
   }
   return {
     get readCount() { return readCount; },
-    async list({ directory, recursive = false, cwd, signal, onProgress }) {
+    async list({ directory, recursive = false, cwd, signal, onProgress, onDiagnostics }) {
       const files = await discover(directory, recursive, signal);
       const records = new Array(files.length);
       let next = 0, loaded = 0, unreadable = 0;
@@ -64,7 +64,9 @@ export function createSessionStore() {
         const retained = new Set([...files, ...evidence.keys()].map(key));
         for (const path of cache.keys()) if (!retained.has(path)) cache.delete(path);
       }
-      return classifySessions(items, { signal, evidence });
+      const classified = await classifySessions(items, { signal, evidence });
+      onDiagnostics?.({ unreadable });
+      return classified;
     },
   };
 }

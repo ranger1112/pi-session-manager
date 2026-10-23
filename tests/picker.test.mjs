@@ -6,20 +6,26 @@ class Input {
   focused = false; value = '';
   setValue(value) { this.value = value; }
   getValue() { return this.value; }
-  handleInput(data) { this.value += data; }
+  handleInput(data) {
+    // 测试用符号按键代表终端控制序列，不应作为搜索文本插入。
+    if (['up', 'down', 'pageUp', 'pageDown', 'enter', 'escape'].includes(data)) return;
+    this.value += data;
+  }
   render() { return ['> ' + this.value]; }
   invalidate() {}
 }
 class SelectList {
   index = 0;
-  constructor(items) { this.items = items; }
+  constructor(items, maxVisible) { this.items = items; this.maxVisible = maxVisible; }
   setSelectedIndex(index) { this.index = index; }
   getSelectedItem() { return this.items[this.index] ?? null; }
   handleInput(data) {
     if (data === 'down') this.index = Math.min(this.items.length - 1, this.index + 1);
+    if (data === 'up') this.index = Math.max(0, this.index - 1);
+    this.onSelectionChange?.(this.getSelectedItem());
     if (data === 'enter' && this.getSelectedItem()) this.onSelect(this.getSelectedItem());
   }
-  render() { return this.items.map(i => i.label); }
+  render() { return this.items.slice(0, this.maxVisible).map(i => i.label); }
   invalidate() {}
 }
 const primitives = { Input, SelectList, matchesKey: (data, key) => data === key,
@@ -30,9 +36,9 @@ const data = [
   { path: '/child', name: 'Explore#abc12345', cwd: '/p', modified: new Date(), isSubagent: true },
 ];
 const flush = () => new Promise(resolve => setImmediate(resolve));
-function setup(load = async () => data) {
+function setup(load = async () => data, options = {}) {
   const finished = [];
-  const picker = createPicker({ primitives, theme, requestRender() {}, done: v => finished.push(v), load });
+  const picker = createPicker({ primitives, theme, requestRender() {}, done: v => finished.push(v), load, ...options });
   return { picker, finished };
 }
 
@@ -93,4 +99,77 @@ test('过期加载不能覆盖新范围，失败可用 Ctrl+R 重试', async () 
   picker.handleInput('ctrl+r');
   await flush();
   assert.match(picker.render(100).join('\n'), /主会话/);
+});
+
+const many = Array.from({ length: 20 }, (_, i) => ({ ...data[0], path: `/session-${i}`, name: `会话 ${i}` }));
+
+test('分页按可见行数移动并限制在首尾，恢复正确路径', async () => {
+  const { picker, finished } = setup(async () => many, { visibleRows: () => 4 });
+  await flush();
+  picker.handleInput('pageUp');
+  picker.handleInput('pageDown');
+  picker.handleInput('pageDown');
+  picker.handleInput('pageUp');
+  picker.handleInput('enter');
+  assert.deepEqual(finished, ['/session-4']);
+  const end = setup(async () => many, { visibleRows: () => 4 });
+  await flush();
+  for (let i = 0; i < 10; i++) end.picker.handleInput('pageDown');
+  end.picker.handleInput('enter');
+  assert.deepEqual(end.finished, ['/session-19']);
+});
+
+test('重绘时更新可见行数，保留选中项并使用新分页步长', async () => {
+  let rows = 8;
+  const { picker, finished } = setup(async () => many, { visibleRows: () => rows });
+  await flush();
+  picker.handleInput('down');
+  assert.equal(picker.render(100).filter(line => /^会话 /.test(line)).length, 8);
+  rows = 3;
+  assert.equal(picker.render(100).filter(line => /^会话 /.test(line)).length, 3);
+  picker.handleInput('pageDown');
+  rows = 6;
+  assert.equal(picker.render(100).filter(line => /^会话 /.test(line)).length, 6);
+  picker.handleInput('enter');
+  assert.deepEqual(finished, ['/session-4']);
+});
+
+test('使用自定义确认、分页和取消键，禁用默认绑定不回退', async () => {
+  const bindings = { cancel: 'alt+x', confirm: 'alt+e', pageDown: 'alt+d', pageUp: 'alt+u' };
+  const keybindings = { matches: (data, action) => data === bindings[action.replace('tui.select.', '')] };
+  const { picker, finished } = setup(async () => many, { keybindings, visibleRows: () => 3 });
+  await flush();
+  picker.handleInput('pageDown');
+  picker.handleInput('enter');
+  assert.deepEqual(finished, []);
+  picker.handleInput('alt+d');
+  picker.handleInput('alt+d');
+  picker.handleInput('alt+u');
+  picker.handleInput('alt+e');
+  assert.deepEqual(finished, ['/session-3']);
+  const cancel = setup(async () => data, { keybindings });
+  cancel.picker.handleInput('escape');
+  assert.deepEqual(cancel.finished, []);
+  cancel.picker.handleInput('alt+x');
+  assert.deepEqual(cancel.finished, [undefined]);
+});
+
+test('不可读警告加载完成后保留，重试清空，并忽略过期诊断', async () => {
+  let count = 0, oldDiagnostics;
+  const { picker } = setup(async (_scope, _signal, _progress, diagnostics) => {
+    if (++count === 1) {
+      oldDiagnostics = diagnostics;
+      diagnostics({ unreadable: 2 });
+    }
+    return data;
+  });
+  await flush();
+  assert.match(picker.render(100).join('\n'), /已跳过 2 个不可读会话文件/);
+  picker.handleInput('不存在');
+  assert.match(picker.render(100).join('\n'), /列表可能不完整/);
+  picker.handleInput('ctrl+r');
+  await flush();
+  oldDiagnostics({ unreadable: 99 });
+  assert.doesNotMatch(picker.render(100).join('\n'), /不可读/);
+  picker.dispose();
 });

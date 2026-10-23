@@ -36,7 +36,9 @@ pi install git:github.com/ranger1112/pi-session-manager
 | 刷新列表 | `Ctrl+R` |
 | 关闭选择器 | `Esc` |
 
-每次打开默认隐藏已核验的子 Agent。加载期间可以取消；不会使用上一范围的旧列表执行恢复。
+表中选择、分页、确认与取消按键为 Pi 默认绑定；也支持自定义 `tui.select.*` 键位。`Tab`、`Ctrl+A` 和 `Ctrl+R` 为本插件固定快捷键。
+
+每次打开默认隐藏已核验的子 Agent。加载期间可以取消；不会使用上一范围的旧列表执行恢复。终端高度变化后列表会调整可见行数，并保留选中项。若扫描跳过不可读文件，完成后会保留警告，提示列表可能不完整。
 
 第一版专注查找与恢复，不提供删除、批量清理、重命名或模型覆盖。恢复走 Pi 的会话切换 API，不把摘要导入当前会话，不创建会话副本。
 
@@ -89,7 +91,7 @@ pi install /absolute/path/to/pi-session-manager
 node tests/host-smoke.mjs /absolute/path/to/pi-coding-agent
 ```
 
-该检查依赖 Pi 当前安装布局中的测试用加载接口，宿主升级后可能需要调整。Windows 下也可传入加引号的绝对路径。
+该检查依赖 Pi 当前安装布局中的测试用加载接口，宿主升级后可能需要调整。Windows 下也可传入加引号的绝对路径。当前已在 Windows、Node.js 22.23.2、Pi / Pi TUI 1.3.0 上验证；会话切换使用模拟上下文，TUI 使用真实组件。
 
 npm 包名为 `pi-main-session-manager`，以免与已有 `pi-session-manager` 混淆；当前通过 Git 安装，未发布 npm。
 

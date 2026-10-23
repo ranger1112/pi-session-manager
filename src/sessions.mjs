@@ -29,14 +29,11 @@ export async function readEvidence(path, signal) {
   try {
     for await (const line of lines) {
       signal?.throwIfAborted();
-      if (/"type"\s*:\s*"message"/.test(line)) evidence.messageCount++;
-      // 大型 toolResult（图片、网页、日志）与分类无关，不反序列化其正文。
-      const metadata = /"type"\s*:\s*"(?:session|session_info)"/.test(line);
-      const conversation = /"role"\s*:\s*"(?:user|assistant)"/.test(line);
-      const agentResult = /"toolName"\s*:\s*"Agent"/.test(line);
-      if (!metadata && !conversation && !agentResult) continue;
+      // 逐行验证 JSON，只统计顶层消息；解析结果不会进入缓存。
       let entry;
       try { entry = JSON.parse(line); } catch { continue; }
+      if (!entry || typeof entry !== 'object') continue;
+      if (entry.type === 'message') evidence.messageCount++;
       if (entry.type === 'session') evidence.header = entry;
       if (entry.type === 'session_info') {
         if (evidence.initialName === undefined) evidence.initialName = entry.name;
