@@ -1,6 +1,8 @@
 # Pi Main Session Manager
 
 [![CI](https://github.com/ranger1112/pi-session-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/ranger1112/pi-session-manager/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.19.0-brightgreen)](package.json)
 
 在 Pi 中输入 `/sessions`，默认隐藏已核验的子 Agent 会话，按最近活动平铺显示历史。无需删除历史，也不必关闭子 Agent 的持久化。
 
@@ -16,7 +18,22 @@ pi install git:github.com/ranger1112/pi-session-manager
 
 然后在 Pi 中执行 `/reload`，或重启 Pi。
 
+固定发布版本（需要安装器支持 git ref）：
+
+```sh
+pi install git:github.com/ranger1112/pi-session-manager#v0.1.0
+```
+
 本插件注册 `/sessions` 和 `/resume-main`，不会替换原生 `/resume` 或 `pi -r`。不要同时启用其他注册 `/sessions` 的扩展。
+
+## 兼容性
+
+| 项目 | 要求 |
+| --- | --- |
+| Node.js | ≥ 22.19.0 |
+| Pi / Pi TUI | 1.4.0 与 1.3.0 已验证；以 peerDependency `*` 声明 |
+| 操作系统 | Windows、Linux（CI 覆盖）；macOS 未单独验证 |
+| 终端 | Pi 的交互式 TUI 模式，非交互模式会提示不可用 |
 
 ## 使用
 
@@ -69,6 +86,18 @@ Pi 的 `parentSession` 只说明父子关联，手动 `/fork`、`/clone` 也会�
 
 信任边界和已知限制见 [DESIGN.md](DESIGN.md)。请勿将真实会话、凭据、日志或生成的个人预览提交到本仓库。
 
+## 常见问题
+
+**首次打开很慢？** 首次需要流式扫描会话目录，历史较大时需要等待；之后只重读文件大小或修改时间变化的文件，`Esc` 可随时取消。
+
+**某些子 Agent 会话仍然显示？** 识别只针对 `@tintinweb/pi-subagents` 的特定持久化格式。父记录缺失、名称被定制或工具结果不完整时无法核验，会保留显示并计入“未核验”；可用 `Ctrl+A` 查看完整列表。
+
+**`/sessions` 没有生效？** 需要交互式 TUI 且会话空闲；不要同时启用其他注册 `/sessions` 的扩展。
+
+**“所有项目”只显示了一部分？** 使用自定义会话存储时，“所有项目”被限制在该存储内，不会扩展到默认存储。
+
+**会修改或删除我的历史吗？** 不会。插件只读会话文件，恢复由 Pi 的会话切换 API 执行。
+
 ## 开发与测试
 
 ```sh
@@ -80,7 +109,7 @@ npm run typecheck
 npm run test:host
 ```
 
-单元测试只使用内存数据和临时目录里的合成会话，不读取个人历史，也不需要安装依赖。
+单元测试只使用内存数据和临时目录里的合成会话，不读取个人历史，也不需要安装依赖。贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)；安全问题请按 [SECURITY.md](SECURITY.md) 私密报告。
 
 通过本地路径加载开发版：
 
@@ -97,11 +126,11 @@ npm run test:host
 node tests/host-smoke.mjs /absolute/path/to/pi-coding-agent
 ```
 
-该检查依赖 Pi 当前安装布局中的测试用加载接口，宿主升级后可能需要调整。当前已在 Windows、Node.js 22.23.2、Pi / Pi TUI 1.3.0 上验证；会话切换使用模拟上下文，TUI 使用真实组件。
+该检查依赖 Pi 当前安装布局中的测试用加载接口，宿主升级后可能需要调整。当前 CI 在 Ubuntu 与 Windows 上使用 Node 22.19.0 / 24.x 验证，Pi 包为 1.4.0（1.3.0 也验证过）；会话切换使用模拟上下文，TUI 使用真实组件。
 
 CI 在 Ubuntu 与 Windows 上运行 Node 22.19.0 / 24.x 的单元测试，并执行 typecheck 与宿主检查。
 
-npm 包名为 `pi-main-session-manager`，以免与已有 `pi-session-manager` 混淆；当前通过 Git 安装，未发布 npm。
+npm 包名为 `pi-main-session-manager`，以免与已有 `pi-session-manager` 混淆；当前通过 Git 安装，未发布 npm。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 参考与致谢
 

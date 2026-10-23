@@ -47,3 +47,13 @@ node tests/host-smoke.mjs <pi-install-dir> # 或指定本机 Pi 安装目录
 - picker 测试注入假的 `Input`、`SelectList`、`matchesKey`、`truncateToWidth` 和 `theme`，不依赖真实 Pi 包。
 - `tests/host-smoke.mjs` 依赖 Pi 当前安装布局中的内部模块路径（`dist/core/extensions/loader.js`、`pi-tui/dist/index.js`），宿主升级后可能需要调整。它默认通过 `import.meta.resolve` 使用 devDependencies 里的 Pi 包，传参则改用本机安装目录。
 - CI（`.github/workflows/ci.yml`）分三个 job：`npm test`（Ubuntu/Windows × Node 22.19.0/24.x，不安装依赖）、`typecheck`、`host-smoke`。
+
+## 发布
+
+版本遵循语义化版本，发布只通过 tag 触发，未发布到 npm：
+
+1. 更新 `package.json` 的 `version` 与 `CHANGELOG.md`。
+2. `git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z`。
+3. `.github/workflows/release.yml` 会重跑测试、typecheck、host-smoke，通过后创建 GitHub Release。
+
+用户通过 `pi install git:github.com/ranger1112/pi-session-manager`（或 `#vX.Y.Z` 锁定）安装。
