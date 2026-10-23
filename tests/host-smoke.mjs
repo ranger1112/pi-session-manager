@@ -1,15 +1,31 @@
-// 可选宿主检查：路径由调用者提供，只使用合成会话。
+// 宿主检查：默认使用项目安装的 Pi 包，也可传入本机 Pi 安装目录；只使用合成会话。
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { createPicker } from '../src/picker.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const host = process.argv[2];
-assert.ok(host, '请提供 Pi 安装目录');
+
+// 宿主包是 ESM-only（exports 无 require 条件），用 import.meta.resolve 定位。
+function packageRoot(name) {
+  let directory = dirname(fileURLToPath(import.meta.resolve(name)));
+  while (directory !== dirname(directory)) {
+    if (existsSync(join(directory, 'package.json'))) return directory;
+    directory = dirname(directory);
+  }
+  throw new Error(`找不到 ${name} 的安装目录`);
+}
+
+const hostArg = process.argv[2];
+const host = hostArg ? resolve(hostArg) : packageRoot('@earendil-works/pi-coding-agent');
 const fromHost = relative => import(pathToFileURL(join(host, relative)).href);
 const { loadExtensions } = await fromHost('dist/core/extensions/loader.js');
-const tui = await fromHost('node_modules/@earendil-works/pi-tui/dist/index.js');
+// 手工安装目录把 pi-tui 放在宿主 node_modules 下；npm 安装时由解析器定位。
+const nestedTui = join(host, 'node_modules/@earendil-works/pi-tui/dist/index.js');
+const tuiEntry = hostArg && existsSync(nestedTui)
+  ? nestedTui : fileURLToPath(import.meta.resolve('@earendil-works/pi-tui'));
+const tui = await import(pathToFileURL(tuiEntry).href);
 const { initTheme, getThemeByName } = await fromHost('dist/modes/interactive/theme/theme.js');
 initTheme('dark', false);
 const theme = getThemeByName('dark');

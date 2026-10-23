@@ -1,5 +1,7 @@
 # Pi Main Session Manager
 
+[![CI](https://github.com/ranger1112/pi-session-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/ranger1112/pi-session-manager/actions/workflows/ci.yml)
+
 在 Pi 中输入 `/sessions`，默认隐藏已核验的子 Agent 会话，按最近活动平铺显示历史。无需删除历史，也不必关闭子 Agent 的持久化。
 
 使用 Pi 原生输入框和选择列表，支持搜索、当前项目／所有项目切换，以及直接恢复原始会话。
@@ -72,10 +74,13 @@ Pi 的 `parentSession` 只说明父子关联，手动 `/fork`、`/clone` 也会�
 ```sh
 git clone https://github.com/ranger1112/pi-session-manager.git
 cd pi-session-manager
-npm test
+npm test          # 单元测试，无需安装依赖
+npm install       # typecheck 与宿主检查需要
+npm run typecheck
+npm run test:host
 ```
 
-单元测试只使用内存数据和临时目录里的合成会话，不读取个人历史，不需要安装依赖。
+单元测试只使用内存数据和临时目录里的合成会话，不读取个人历史，也不需要安装依赖。
 
 通过本地路径加载开发版：
 
@@ -85,13 +90,16 @@ pi install /absolute/path/to/pi-session-manager
 
 修改后运行 `/reload`。开发版与 Git 版不要同时启用。
 
-可选的宿主集成检查使用本机 Pi 安装目录，检查扩展加载、命令恢复／取消和真实 TUI 组件；仅使用合成记录，不扫描个人历史：
+宿主集成检查会加载扩展、检查命令恢复／取消和真实 TUI 组件；仅使用合成记录，不扫描个人历史。默认使用 `npm install` 安装的 Pi 包，也可传入本机 Pi 安装目录（Windows 下需加引号）：
 
 ```sh
+npm run test:host
 node tests/host-smoke.mjs /absolute/path/to/pi-coding-agent
 ```
 
-该检查依赖 Pi 当前安装布局中的测试用加载接口，宿主升级后可能需要调整。Windows 下也可传入加引号的绝对路径。当前已在 Windows、Node.js 22.23.2、Pi / Pi TUI 1.3.0 上验证；会话切换使用模拟上下文，TUI 使用真实组件。
+该检查依赖 Pi 当前安装布局中的测试用加载接口，宿主升级后可能需要调整。当前已在 Windows、Node.js 22.23.2、Pi / Pi TUI 1.3.0 上验证；会话切换使用模拟上下文，TUI 使用真实组件。
+
+CI 在 Ubuntu 与 Windows 上运行 Node 22.19.0 / 24.x 的单元测试，并执行 typecheck 与宿主检查。
 
 npm 包名为 `pi-main-session-manager`，以免与已有 `pi-session-manager` 混淆；当前通过 Git 安装，未发布 npm。
 

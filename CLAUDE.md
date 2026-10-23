@@ -14,7 +14,10 @@ Pi 扩展（`pi-main-session-manager`）：注册 `/sessions` 和 `/resume-main`
 npm test                                  # 全部单元测试（node:test，无需 npm install）
 node --test tests/store.test.mjs          # 单个测试文件
 node --test --test-name-pattern="缓存" tests/*.test.mjs   # 按测试名过滤
-node tests/host-smoke.mjs <pi-install-dir> # 可选宿主集成检查（必须传入 Pi 安装目录；npm run test:host 不能传参，直接运行会因缺少参数失败）
+npm install                               # typecheck 与宿主检查的前置
+npm run typecheck                         # tsc --noEmit（index.ts + src/*.mjs 推断）
+npm run test:host                         # 宿主检查，使用已安装的 Pi 包
+node tests/host-smoke.mjs <pi-install-dir> # 或指定本机 Pi 安装目录
 ```
 
 没有构建、lint 或类型检查步骤：`index.ts` 由 Pi 宿主直接加载，`src/*.mjs` 是纯 ESM。测试只依赖 Node 内置模块和临时目录中的合成 JSONL，不读取真实历史。
@@ -42,4 +45,5 @@ node tests/host-smoke.mjs <pi-install-dir> # 可选宿主集成检查（必须�
 - 用 `node:test` + `node:assert/strict`，中文测试名描述行为。
 - 文件与分类测试用 `mkdtemp(tmpdir())` 写合成 JSONL，`finally` 中 `rm`。
 - picker 测试注入假的 `Input`、`SelectList`、`matchesKey`、`truncateToWidth` 和 `theme`，不依赖真实 Pi 包。
-- `tests/host-smoke.mjs` 依赖 Pi 当前安装布局中的内部模块路径（`dist/core/extensions/loader.js`、`pi-tui/dist/index.js`），宿主升级后可能需要调整。
+- `tests/host-smoke.mjs` 依赖 Pi 当前安装布局中的内部模块路径（`dist/core/extensions/loader.js`、`pi-tui/dist/index.js`），宿主升级后可能需要调整。它默认通过 `import.meta.resolve` 使用 devDependencies 里的 Pi 包，传参则改用本机安装目录。
+- CI（`.github/workflows/ci.yml`）分三个 job：`npm test`（Ubuntu/Windows × Node 22.19.0/24.x，不安装依赖）、`typecheck`、`host-smoke`。
