@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 设计边界与已知限制
+    url: https://github.com/ranger1112/pi-session-manager/blob/main/DESIGN.md
+    about: 提交前先确认问题是否属于已知限制。
+  - name: 安全问题
+    url: https://github.com/ranger1112/pi-session-manager/security/advisories/new
+    about: 请勿公开报告漏洞。
