@@ -115,6 +115,17 @@ test('合法转义类型和大型工具结果正常计数，正文不保留在�
   });
 });
 
+test('用户消息含 null 或非文本块时仍提取文本并正常计数', async () => {
+  await fixture(async file => {
+    const path = await file('content', [header('content'),
+      { type: 'message', message: { role: 'user',
+        content: [null, { type: 'text', text: '有效消息' }, 'raw'] } }]);
+    const evidence = await sessions.readEvidence(path);
+    assert.equal(evidence.messageCount, 1);
+    assert.equal(evidence.firstMessage, '有效消息');
+  });
+});
+
 test('取消分类立即中断，不把取消当作无法读取', async () => {
   const controller = new AbortController();
   controller.abort();

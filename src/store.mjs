@@ -3,22 +3,28 @@ import { join, resolve } from 'node:path';
 import { classifySessions, readEvidence } from './sessions.mjs';
 
 const key = path => process.platform === 'win32' ? resolve(path).toLowerCase() : resolve(path);
-const sameCwd = (a, b) => key(a) === key(b);
+// 与 Pi 一致：缺失或空 cwd 视为未知，不能折叠成进程工作目录。
+const sameCwd = (a, b) => typeof a === 'string' && typeof b === 'string'
+  && a !== '' && b !== '' && key(a) === key(b);
 const MAX_PARALLEL_READS = 6;
 
-async function discover(directory, recursive, signal) {
+async function discover(directory, { recursive, signal, onSkip, readDirectory }) {
   signal?.throwIfAborted();
-  const entries = await readdir(directory, { withFileTypes: true });
+  const entries = await readDirectory(directory, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
     const path = join(directory, entry.name);
     if (entry.isFile() && entry.name.endsWith('.jsonl')) files.push(path);
-    if (recursive && entry.isDirectory()) files.push(...await discover(path, true, signal));
+    if (recursive && entry.isDirectory()) {
+      // 单个子目录不可读只影响它自己，其余会话照常返回。
+      try { files.push(...await discover(path, { recursive, signal, onSkip, readDirectory })); }
+      catch { signal?.throwIfAborted(); onSkip?.(); }
+    }
   }
   return files;
 }
 
-export function createSessionStore() {
+export function createSessionStore({ readDirectory = readdir } = {}) {
   const cache = new Map();
   let readCount = 0;
   async function read(path, signal) {
@@ -28,18 +34,22 @@ export function createSessionStore() {
     readCount++;
     const time = evidence.activity || Date.parse(evidence.header.timestamp) || stats.mtimeMs;
     const record = { size: stats.size, mtimeMs: stats.mtimeMs, evidence,
-      item: { path, id: evidence.header.id, cwd: evidence.header.cwd ?? '',
-        parentSessionPath: evidence.header.parentSession, name: evidence.name,
-        firstMessage: evidence.firstMessage, messageCount: evidence.messageCount, modified: new Date(time) } };
+      item: { path, id: evidence.header.id,
+        cwd: typeof evidence.header.cwd === 'string' ? evidence.header.cwd : '',
+        parentSessionPath: typeof evidence.header.parentSession === 'string' ? evidence.header.parentSession : undefined,
+        name: evidence.name, firstMessage: evidence.firstMessage,
+        messageCount: evidence.messageCount, modified: new Date(time) } };
     cache.set(id, record);
     return record;
   }
   return {
     get readCount() { return readCount; },
     async list({ directory, recursive = false, cwd, signal, onProgress, onDiagnostics }) {
-      const files = await discover(directory, recursive, signal);
+      let unreadable = 0;
+      const files = await discover(directory, { recursive, signal, readDirectory,
+        onSkip: () => { unreadable++; } });
       const records = new Array(files.length);
-      let next = 0, loaded = 0, unreadable = 0;
+      let next = 0, loaded = 0;
       await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL_READS, files.length) }, async () => {
         while (next < files.length) {
           signal?.throwIfAborted();
