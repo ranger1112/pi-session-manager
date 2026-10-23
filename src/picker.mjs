@@ -32,7 +32,9 @@ export function createPicker(options) {
     if (index >= 0) list.setSelectedIndex(index);
     list.onSelectionChange = item => { selectedPath = item.value; };
     list.onSelect = item => { if (!loading && !error) finish(item.value); };
-    selectedPath = list.getSelectedItem()?.value;
+    // 加载中的空列表不能清掉选中路径，否则加载完成后无法恢复到原选中项。
+    const selected = list.getSelectedItem();
+    if (selected) selectedPath = selected.value;
   };
   const dispose = () => { disposed = true; controller?.abort(); };
   const finish = value => { dispose(); done(value); };
@@ -70,7 +72,7 @@ export function createPicker(options) {
       const count = `${items.length} 个会话 · 已隐藏 ${hidden}${unknown ? ` · 未核验 ${unknown}（保留）` : ''}`;
       const lines = [border, theme.fg('accent', theme.bold(title)),
         theme.fg('muted', count), ...input.render(width), ''];
-      if (!loading && unreadable) lines.push(theme.fg('warning', `已跳过 ${unreadable} 个不可读会话文件，列表可能不完整`));
+      if (!loading && unreadable) lines.push(theme.fg('warning', `已跳过 ${unreadable} 个不可读会话文件或目录，列表可能不完整`));
       if (loading) lines.push(theme.fg('muted', `加载中… ${status}`));
       else if (error) lines.push(theme.fg('error', `读取失败：${error}`));
       else if (!list?.getSelectedItem()) lines.push(theme.fg('muted', '没有匹配的会话'));

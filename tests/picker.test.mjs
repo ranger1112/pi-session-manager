@@ -154,6 +154,21 @@ test('使用自定义确认、分页和取消键，禁用默认绑定不回退',
   assert.deepEqual(cancel.finished, [undefined]);
 });
 
+test('打开时预选当前会话而非最新行，刷新后仍保留选中项', async () => {
+  const ordered = [
+    { path: '/new', name: '新会话', cwd: '/p', modified: new Date('2026-10-23'), messageCount: 1 },
+    { path: '/old', name: '旧会话', cwd: '/p', modified: new Date('2026-01-01'), messageCount: 1 },
+  ];
+  const { picker, finished } = setup(async () => ordered, { currentPath: '/old' });
+  await flush();
+  assert.match(picker.render(100).join('\n'), /● 旧会话/);
+  picker.handleInput('ctrl+r');
+  await flush();
+  assert.match(picker.render(100).join('\n'), /● 旧会话/);
+  picker.handleInput('enter');
+  assert.deepEqual(finished, ['/old']);
+});
+
 test('不可读警告加载完成后保留，重试清空，并忽略过期诊断', async () => {
   let count = 0, oldDiagnostics;
   const { picker } = setup(async (_scope, _signal, _progress, diagnostics) => {

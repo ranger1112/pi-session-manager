@@ -47,7 +47,8 @@ export async function readEvidence(path, signal) {
       if (message?.role === 'user' && !evidence.firstMessage) {
         const content = message.content;
         evidence.firstMessage = (typeof content === 'string' ? content :
-          Array.isArray(content) ? content.filter(b => b.type === 'text').map(b => b.text).join(' ') : '').slice(0, 600);
+          Array.isArray(content) ? content.filter(b => b && typeof b === 'object'
+            && b.type === 'text' && typeof b.text === 'string').map(b => b.text).join(' ') : '').slice(0, 600);
       }
       const details = message?.details;
       if (message?.role === 'toolResult' && message.toolName === 'Agent'
