@@ -1,0 +1,13 @@
+node_modules/
+coverage/
+*.log
+*.tgz
+.env
+.env.*
+!.env.example
+.pi/
+.learnings/
+*.jsonl
+render-preview.txt
+.DS_Store
+Thumbs.db

@@ -1,0 +1,27 @@
+{
+  "name": "pi-main-session-manager",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A main-session-first picker for Pi that hides verified subagent sessions",
+  "type": "module",
+  "license": "MIT",
+  "author": "ranger",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ranger1112/pi-session-manager.git"
+  },
+  "homepage": "https://github.com/ranger1112/pi-session-manager#readme",
+  "bugs": { "url": "https://github.com/ranger1112/pi-session-manager/issues" },
+  "keywords": ["pi-package", "pi", "sessions", "subagents"],
+  "engines": { "node": ">=22.19.0" },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:host": "node tests/host-smoke.mjs"
+  },
+  "files": ["index.ts", "src/", "README.md", "DESIGN.md", "LICENSE"],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "pi": { "extensions": ["./index.ts"] }
+}
