@@ -169,6 +169,14 @@ test('打开时预选当前会话而非最新行，刷新后仍保留选中项',
   assert.deepEqual(finished, ['/old']);
 });
 
+test('Windows 下当前会话标记忽略路径大小写', { skip: process.platform !== 'win32' }, async () => {
+  const items = [{ path: 'C:\\Temp\\Session.jsonl', name: '当前会话', cwd: 'C:\\Temp',
+    modified: new Date(), messageCount: 1 }];
+  const { picker } = setup(async () => items, { currentPath: 'c:\\temp\\session.jsonl' });
+  await flush();
+  assert.match(picker.render(100).join('\n'), /● 当前会话/);
+});
+
 test('不可读警告加载完成后保留，重试清空，并忽略过期诊断', async () => {
   let count = 0, oldDiagnostics;
   const { picker } = setup(async (_scope, _signal, _progress, diagnostics) => {

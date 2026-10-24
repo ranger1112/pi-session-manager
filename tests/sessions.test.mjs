@@ -115,6 +115,17 @@ test('合法转义类型和大型工具结果正常计数，正文不保留在�
   });
 });
 
+test('预计算搜索文本优先于默认拼装，sorted 跳过重复排序', () => {
+  const prepared = [
+    item('/a', { name: '旧', searchText: '预计算 关键词', modified: new Date('2026-01-01') }),
+    item('/b', { name: '新', searchText: '预计算 其他', modified: new Date('2026-10-01') }),
+  ];
+  assert.equal(sessions.selectSessions(prepared, { query: '关键词', sorted: true }).length, 1);
+  assert.equal(sessions.selectSessions(prepared, { query: '旧', sorted: true }).length, 0);
+  assert.deepEqual(sessions.selectSessions(prepared, { sorted: true }).map(s => s.path), ['/a', '/b']);
+  assert.deepEqual(sessions.selectSessions(prepared).map(s => s.path), ['/b', '/a']);
+});
+
 test('用户消息含 null 或非文本块时仍提取文本并正常计数', async () => {
   await fixture(async file => {
     const path = await file('content', [header('content'),

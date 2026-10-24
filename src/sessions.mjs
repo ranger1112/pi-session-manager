@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { createInterface } from 'node:readline';
-import { basename, resolve } from 'node:path';
+import { basename } from 'node:path';
+import { pathKey } from './paths.mjs';
 
 export const cleanText = value => String(value ?? '').replace(/[\r\n\t]+/g, ' ')
   .replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim();
@@ -9,16 +10,22 @@ export function sessionTitle(item) {
   return cleanText(item.name) || cleanText(item.firstMessage) || basename(item.path, '.jsonl');
 }
 
-export function selectSessions(items, { query = '', showAgents = false } = {}) {
-  const terms = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
-  return items.filter(item => {
-    if (!showAgents && item.isSubagent) return false;
-    const text = `${sessionTitle(item)} ${item.cwd} ${item.firstMessage ?? ''}`.toLocaleLowerCase();
-    return terms.every(term => text.includes(term));
-  }).sort((a, b) => b.modified.getTime() - a.modified.getTime());
+// 搜索文本只在加载时构造一次，供选择器在每次按键时复用。
+export function sessionSearchText(item) {
+  return `${sessionTitle(item)} ${item.cwd ?? ''} ${item.firstMessage ?? ''}`.toLocaleLowerCase();
 }
 
-const pathKey = path => process.platform === 'win32' ? resolve(path).toLowerCase() : resolve(path);
+export function selectSessions(items, { query = '', showAgents = false, sorted = false } = {}) {
+  const terms = query.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+  const matched = items.filter(item => {
+    if (!showAgents && item.isSubagent) return false;
+    if (terms.length === 0) return true;
+    const text = item.searchText ?? sessionSearchText(item);
+    return terms.every(term => text.includes(term));
+  });
+  // 选择器在加载时已完成排序，刷新/搜索时无需重复排序。
+  return sorted ? matched : matched.sort((a, b) => b.modified.getTime() - a.modified.getTime());
+}
 
 // 流式提取列表和分类元数据，不保留完整对话正文。
 export async function readEvidence(path, signal) {
