@@ -1,16 +1,12 @@
 import { getAgentDir, type ExtensionAPI, type ExtensionCommandContext } from '@earendil-works/pi-coding-agent';
 import { Input, SelectList, matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
-import { resolve } from 'node:path';
 import { cleanText, sessionTitle } from './src/sessions.mjs';
 import { createPicker } from './src/picker.mjs';
 import { createSessionStore } from './src/store.mjs';
 import { sessionStorage } from './src/scope.mjs';
+import { pathsEqual } from './src/paths.mjs';
 
 const store = createSessionStore();
-
-const samePath = (a: string | undefined, b: string) => a && (
-  process.platform === 'win32' ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b)
-);
 
 export async function browseSessions(args: string, ctx: ExtensionCommandContext) {
   if (ctx.mode !== 'tui') {
@@ -39,7 +35,7 @@ export async function browseSessions(args: string, ctx: ExtensionCommandContext)
       });
     },
   }));
-  if (!target || samePath(currentPath, target)) return;
+  if (!target || pathsEqual(currentPath, target)) return;
   try {
     const result = await ctx.switchSession(target, {
       withSession: async fresh => fresh.ui.notify(`已恢复：${sessionTitle({ path: target, name: fresh.sessionManager.getSessionName() })}`, 'info'),

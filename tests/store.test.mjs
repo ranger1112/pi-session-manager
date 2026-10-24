@@ -76,6 +76,32 @@ test('递归扫描跳过不可读子目录，其余会话照常返回并计入�
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test('目录外父会话参与分类但不加入列表，缓存随每次列举淘汰', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pi-session-store-'));
+  try {
+    const project = join(root, 'project'), archive = join(root, 'archive');
+    await mkdir(project); await mkdir(archive);
+    const parent = join(archive, 'parent.jsonl'), child = join(project, 'child.jsonl');
+    await writeFile(parent, [
+      { type: 'session', id: 'parent', cwd: '/project' },
+      { type: 'message', message: { role: 'toolResult', toolName: 'Agent',
+        details: { agentId: 'abc12345-123', subagentType: 'Explore' } } },
+    ].map(JSON.stringify).join('\n') + '\n');
+    await writeFile(child, [
+      { type: 'session', id: 'child', cwd: '/project', parentSession: parent },
+      { type: 'session_info', name: 'Explore#abc12345' },
+    ].map(JSON.stringify).join('\n') + '\n');
+    const store = createSessionStore();
+    const result = await store.list({ directory: project, cwd: '/project' });
+    assert.equal(result.length, 1);
+    assert.equal(result[0].isSubagent, true);
+    assert.equal(store.cachedCount, 2); // 子会话 + 目录外父会话
+    await rm(child);
+    assert.equal((await store.list({ directory: project })).length, 0);
+    assert.equal(store.cachedCount, 0);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test('返回列表保持数组接口，同时提供最终不可读统计，修复文件后统计清零', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pi-session-store-'));
   try {

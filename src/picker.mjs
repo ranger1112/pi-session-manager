@@ -1,4 +1,5 @@
-import { cleanText, selectSessions, sessionTitle } from './sessions.mjs';
+import { cleanText, selectSessions, sessionSearchText, sessionTitle } from './sessions.mjs';
+import { pathsEqual } from './paths.mjs';
 
 export function createPicker(options) {
   const { primitives: { Input, SelectList, matchesKey, truncateToWidth }, theme, done, load } = options;
@@ -14,13 +15,18 @@ export function createPicker(options) {
     : defaults.some(key => matchesKey(data, key));
   const keyHint = (action, defaults) => (options.keybindings?.getKeys?.(`tui.select.${action}`) ?? defaults)
     .join('/') || '未绑定';
+  // 标签、描述与搜索文本在加载时构造一次；按键/缩放只做过滤与重排。
+  const decorate = item => ({
+    ...item,
+    searchText: sessionSearchText(item),
+    label: `${pathsEqual(item.path, options.currentPath) ? '● ' : ''}${item.isSubagent ? '[Agent] ' : ''}${sessionTitle(item)}`,
+    description: `${item.messageCount ?? 0} 条 · ${item.modified.toLocaleDateString()} · ${cleanText(item.cwd)}`,
+  });
   const rebuild = () => {
-    filtered = selectSessions(items, { query: input.getValue(), showAgents });
+    filtered = selectSessions(items, { query: input.getValue(), showAgents, sorted: true });
     listRows = rows();
     list = new SelectList(filtered.map(item => ({
-      value: item.path,
-      label: `${item.path === options.currentPath ? '● ' : ''}${item.isSubagent ? '[Agent] ' : ''}${sessionTitle(item)}`,
-      description: `${item.messageCount ?? 0} 条 · ${item.modified.toLocaleDateString()} · ${cleanText(item.cwd)}`,
+      value: item.path, label: item.label, description: item.description,
     })), listRows, {
       selectedPrefix: text => theme.fg('accent', text),
       selectedText: text => theme.fg('accent', text),
@@ -28,7 +34,7 @@ export function createPicker(options) {
       scrollInfo: text => theme.fg('muted', text),
       noMatch: text => theme.fg('warning', text),
     });
-    const index = filtered.findIndex(item => item.path === selectedPath);
+    const index = filtered.findIndex(item => pathsEqual(item.path, selectedPath));
     if (index >= 0) list.setSelectedIndex(index);
     list.onSelectionChange = item => { selectedPath = item.value; };
     list.onSelect = item => { if (!loading && !error) finish(item.value); };
@@ -52,7 +58,8 @@ export function createPicker(options) {
         unreadable = diagnostics.unreadable;
       });
       if (disposed || token !== generation) return;
-      items = loaded; loading = false; rebuild(); renderAgain();
+      items = loaded.map(decorate).sort((a, b) => b.modified.getTime() - a.modified.getTime());
+      loading = false; rebuild(); renderAgain();
     } catch (cause) {
       if (disposed || token !== generation) return;
       loading = false;
@@ -96,7 +103,7 @@ export function createPicker(options) {
       const pageUp = selectionKey(data, 'pageUp', ['pageUp']);
       const pageDown = selectionKey(data, 'pageDown', ['pageDown']);
       if (pageUp || pageDown) {
-        const index = filtered.findIndex(item => item.path === selectedPath);
+        const index = filtered.findIndex(item => pathsEqual(item.path, selectedPath));
         if (index >= 0) {
           const next = Math.max(0, Math.min(filtered.length - 1, index + (pageUp ? -listRows : listRows)));
           list.setSelectedIndex(next);

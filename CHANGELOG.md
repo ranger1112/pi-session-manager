@@ -2,6 +2,15 @@
 
 遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 和[语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Changed
+
+- 路径比较统一到 `src/paths.mjs`，选择器标记与选中项也使用规范化比较。
+- 缓存淘汰覆盖所有列举范围，不再只限于递归扫描。
+- 目录外父会话改为有限并发读取，不再串行等待。
+- 选择器在加载时预计算搜索文本与显示标签，按键和缩放不再重复构造。
+
 ## [0.1.0] - 2026-10-24
 
 ### Added

@@ -1,11 +1,8 @@
 import { readdir, stat } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { classifySessions, readEvidence } from './sessions.mjs';
+import { pathKey, pathsEqual } from './paths.mjs';
 
-const key = path => process.platform === 'win32' ? resolve(path).toLowerCase() : resolve(path);
-// 与 Pi 一致：缺失或空 cwd 视为未知，不能折叠成进程工作目录。
-const sameCwd = (a, b) => typeof a === 'string' && typeof b === 'string'
-  && a !== '' && b !== '' && key(a) === key(b);
 const MAX_PARALLEL_READS = 6;
 
 async function discover(directory, { recursive, signal, onSkip, readDirectory }) {
@@ -28,7 +25,7 @@ export function createSessionStore({ readDirectory = readdir } = {}) {
   const cache = new Map();
   let readCount = 0;
   async function read(path, signal) {
-    const stats = await stat(path), id = key(path), previous = cache.get(id);
+    const stats = await stat(path), id = pathKey(path), previous = cache.get(id);
     if (previous?.size === stats.size && previous?.mtimeMs === stats.mtimeMs) return previous;
     const evidence = await readEvidence(path, signal);
     readCount++;
@@ -44,6 +41,7 @@ export function createSessionStore({ readDirectory = readdir } = {}) {
   }
   return {
     get readCount() { return readCount; },
+    get cachedCount() { return cache.size; },
     async list({ directory, recursive = false, cwd, signal, onProgress, onDiagnostics }) {
       let unreadable = 0;
       const files = await discover(directory, { recursive, signal, readDirectory,
@@ -60,20 +58,25 @@ export function createSessionStore({ readDirectory = readdir } = {}) {
         }
       }));
       const available = records.filter(Boolean);
-      const items = available.map(record => record.item).filter(item => !cwd || sameCwd(item.cwd, cwd));
+      const items = available.map(record => record.item).filter(item => !cwd || pathsEqual(item.cwd, cwd));
       const evidence = new Map(available.map(record => [record.item.path, record.evidence]));
       // 单目录外的父会话也用相同 stat 缓存，仅用于分类，不加入可恢复列表。
-      for (const parent of new Set(items.map(item => item.parentSessionPath).filter(Boolean))) {
-        signal?.throwIfAborted();
-        if (evidence.has(parent)) continue;
-        try { evidence.set(parent, (await read(parent, signal)).evidence); }
-        catch { signal?.throwIfAborted(); }
-      }
-      // 不保留已删除文件的缓存；外部父记录仍按 stat 校验后复用。
-      if (recursive) {
-        const retained = new Set([...files, ...evidence.keys()].map(key));
-        for (const path of cache.keys()) if (!retained.has(path)) cache.delete(path);
-      }
+      // 与主列表一样走有限并发，避免外部父记录较多时串行读取。
+      const known = new Set([...evidence.keys()].map(pathKey));
+      const parents = [...new Set(items.map(item => item.parentSessionPath).filter(Boolean))]
+        .filter(parent => !known.has(pathKey(parent)));
+      let parentIndex = 0;
+      await Promise.all(Array.from({ length: Math.min(MAX_PARALLEL_READS, parents.length) }, async () => {
+        while (parentIndex < parents.length) {
+          signal?.throwIfAborted();
+          const parent = parents[parentIndex++];
+          try { evidence.set(parent, (await read(parent, signal)).evidence); }
+          catch { signal?.throwIfAborted(); }
+        }
+      }));
+      // 每次列举都淘汰本次结果之外的缓存；外部父记录仍按 stat 校验后复用。
+      const retained = new Set([...files, ...evidence.keys()].map(pathKey));
+      for (const path of cache.keys()) if (!retained.has(path)) cache.delete(path);
       const classified = await classifySessions(items, { signal, evidence });
       onDiagnostics?.({ unreadable });
       return classified;

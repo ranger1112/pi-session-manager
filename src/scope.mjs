@@ -1,9 +1,9 @@
 import { join, resolve } from 'node:path';
+import { pathKey } from './paths.mjs';
 export function sessionStorage({ agentDir, cwd, sessionDir, scope }) {
   const root = join(agentDir, 'sessions');
   const encoded = `--${resolve(cwd).replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`;
-  const normalize = path => process.platform === 'win32' ? resolve(path).toLowerCase() : resolve(path);
-  const custom = normalize(sessionDir) !== normalize(join(root, encoded));
+  const custom = pathKey(sessionDir) !== pathKey(join(root, encoded));
   return { directory: scope === 'current' || custom ? sessionDir : root,
     recursive: scope === 'all' && !custom, cwd: scope === 'current' ? cwd : undefined };
 }
