@@ -10,7 +10,7 @@
 
 ## 安装
 
-需要 Node.js **22.19+** 和使用 `@earendil-works` 包的 Pi；当前界面为简体中文。
+需要 Node.js **22.19+** 和使用 `@earendil-works` 包的 Pi；界面支持简体中文和英文，默认按系统语言选择。
 
 ```sh
 pi install git:github.com/ranger1112/pi-session-manager
@@ -43,6 +43,9 @@ pi install git:github.com/ranger1112/pi-session-manager#v0.1.0
 /sessions agents       当前项目，包含子 Agent
 /sessions all agents   所有项目，包含子 Agent
 /resume-main           /sessions 的别名
+/sessions lang zh-CN    界面固定为简体中文
+/sessions lang en       界面固定为英文
+/sessions lang auto     恢复自动语言选择
 ```
 
 | 操作 | 按键 |
@@ -56,6 +59,19 @@ pi install git:github.com/ranger1112/pi-session-manager#v0.1.0
 | 关闭选择器 | `Esc` |
 
 表中选择、分页、确认与取消按键为 Pi 默认绑定；也支持自定义 `tui.select.*` 键位。`Tab`、`Ctrl+A` 和 `Ctrl+R` 为本插件固定快捷键。
+
+### 更容易辨认会话
+
+- 已命名会话始终使用原名称；未命名且首条消息只有附件路径时，使用附件文件名。剪贴板图片的随机临时名称显示为“图片”，原始路径仍可搜索，并保留在详情中。
+- 列表显示“显示/匹配数、可见数、总数、隐藏数和未核验数”，筛选名为“隐藏已核验子 Agent”，不会把未核验记录误称为已确认的主会话。
+- 当前项目列表不重复项目路径；所有项目列表显示项目名。日期显示到分钟，较窄终端优先保留标题。
+- 高度足够时，选中项下方显示标题、首条消息前 600 个字符、项目目录、时间、消息数、分类原因和会话文件路径；空间不足时缩减或隐藏详情。长行按终端宽度裁剪，不改写原数据。
+
+### 界面语言
+
+`auto` 按 `LC_ALL` → `LC_MESSAGES` → `LANG` → 系统 locale 的顺序检测；中文 locale 使用 `zh-CN`，其他或无法识别的 locale 使用英文。现有中文用户可用 `/sessions lang zh-CN` 固定中文。
+
+语言偏好保存在 Pi agent 目录的 `pi-main-session-manager.json`，不修改 Pi 的 `settings.json`，也不写入会话文件。设置后下次打开选择器即生效；命令描述在 `/reload` 或重启后更新。标题、消息、路径、Agent 类型与底层错误原文不翻译。
 
 每次打开默认隐藏已核验的子 Agent。加载期间可以取消；不会使用上一范围的旧列表执行恢复。终端高度变化后列表会调整可见行数，并保留选中项。若扫描跳过不可读文件或目录，完成后会保留警告，提示列表可能不完整。
 
@@ -84,6 +100,8 @@ Pi 的 `parentSession` 只说明父子关联，手动 `/fork`、`/clone` 也会�
 - 首次打开需扫描历史，较大的目录可能需要等待；`Esc` 可取消。
 - 自定义会话存储的“所有项目”限制在当前存储，不扩展到默认存储。
 
+性能基线使用固定合成正文，分别报告冷读取、缓存命中、搜索预处理/查询与流式读取取消耗时；不等同于真实大型历史的性能。可用 `node scripts/benchmark.mjs --small` 快速验证。
+
 信任边界和已知限制见 [DESIGN.md](DESIGN.md)。请勿将真实会话、凭据、日志或生成的个人预览提交到本仓库。
 
 ## 常见问题
@@ -107,6 +125,7 @@ npm test          # 单元测试，无需安装依赖
 npm install       # typecheck 与宿主检查需要
 npm run typecheck
 npm run test:host
+npm run benchmark  # 临时目录合成 1,000 / 10,000 条会话，不读取个人历史
 ```
 
 单元测试只使用内存数据和临时目录里的合成会话，不读取个人历史，也不需要安装依赖。贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)；安全问题请按 [SECURITY.md](SECURITY.md) 私密报告。

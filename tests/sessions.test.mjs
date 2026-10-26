@@ -137,6 +137,35 @@ test('用户消息含 null 或非文本块时仍提取文本并正常计数', as
   });
 });
 
+test('附件标题保留命名优先，支持 Windows/POSIX/引号路径并保留搜索原文', () => {
+  const temp = item('/image.jsonl', { name: '', firstMessage: 'C:\\Temp\\pi-clipboard-ab12-34cd.png' });
+  assert.equal(sessions.sessionTitle(temp), '图片');
+  assert.equal(sessions.sessionTitle(temp, { image: 'Image' }), 'Image');
+  assert.match(sessions.sessionSearchText(temp, { image: 'Image' }), /^image /);
+  assert.equal(sessions.sessionTitle({ ...temp, name: '自己的标题' }), '自己的标题');
+  assert.equal(sessions.sessionTitle({ ...temp, firstMessage: '"/tmp/annual report.pdf"' }), '附件: annual report.pdf');
+  assert.equal(sessions.sessionTitle({ ...temp, firstMessage: '/tmp/design.png' }), '图片: design.png');
+  assert.equal(sessions.sessionTitle({ ...temp, firstMessage: '请检查 /tmp/design.png' }), '请检查 /tmp/design.png');
+  assert.equal(sessions.selectSessions([temp], { query: 'ab12' }).length, 1);
+});
+
+test('分类原因区分父记录不可读、调用不匹配、正常分支和核验成功，不改变隐藏规则', async () => {
+  await fixture(async file => {
+    const parent = await file('main', [header('main'), agent('abc12345-1234')]);
+    const matching = await file('matching', [header('matching', parent), named('Explore#abc12345')]);
+    const missing = await file('missing', [header('missing', '/missing/parent'), named('Explore#abc12345')]);
+    const mismatch = await file('mismatch', [header('mismatch', parent), named('Explore#ffffffff')]);
+    const branch = await file('branch', [header('branch', parent), named('普通分支')]);
+    const result = await sessions.classifySessions([
+      item(parent), item(matching, { parentSessionPath: parent }),
+      item(missing, { parentSessionPath: '/missing/parent' }),
+      item(mismatch, { parentSessionPath: parent }), item(branch, { parentSessionPath: parent }),
+    ]);
+    assert.deepEqual(result.map(s => s.classificationReason), ['noParent', 'verified', 'parentUnavailable', 'noMatchingCall', 'ordinaryBranch']);
+    assert.deepEqual(result.filter(s => s.isSubagent).map(s => s.path), [matching]);
+  });
+});
+
 test('取消分类立即中断，不把取消当作无法读取', async () => {
   const controller = new AbortController();
   controller.abort();

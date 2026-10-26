@@ -38,7 +38,7 @@ const data = [
 const flush = () => new Promise(resolve => setImmediate(resolve));
 function setup(load = async () => data, options = {}) {
   const finished = [];
-  const picker = createPicker({ primitives, theme, requestRender() {}, done: v => finished.push(v), load, ...options });
+  const picker = createPicker({ primitives, theme, requestRender() {}, done: v => finished.push(v), load, visibleRows: () => 6, ...options });
   return { picker, finished };
 }
 
@@ -124,7 +124,8 @@ test('重绘时更新可见行数，保留选中项并使用新分页步长', as
   const { picker, finished } = setup(async () => many, { visibleRows: () => rows });
   await flush();
   picker.handleInput('down');
-  assert.equal(picker.render(100).filter(line => /^会话 /.test(line)).length, 8);
+  // 中等高度保留两行详情及分隔线，列表获得剩余五行。
+  assert.equal(picker.render(100).filter(line => /^会话 /.test(line)).length, 6);
   rows = 3;
   assert.equal(picker.render(100).filter(line => /^会话 /.test(line)).length, 3);
   picker.handleInput('pageDown');
@@ -175,6 +176,29 @@ test('Windows 下当前会话标记忽略路径大小写', { skip: process.platf
   const { picker } = setup(async () => items, { currentPath: 'c:\\temp\\session.jsonl' });
   await flush();
   assert.match(picker.render(100).join('\n'), /● 当前会话/);
+});
+
+test('英文界面、精确统计和选中项详情不改变会话内容', async () => {
+  const fixture = [
+    { ...data[0], path: '/image', name: '', firstMessage: 'C:\\Temp\\pi-clipboard-abc123.png',
+      classification: 'unknown', classificationReason: 'parentUnavailable' },
+    { ...data[0], path: '/named', name: '用户自定义标题', firstMessage: '修复订单' },
+    data[1],
+  ];
+  const { picker } = setup(async () => fixture, { language: 'en', visibleRows: () => 18 });
+  await flush();
+  const rendered = picker.render(160).join('\n');
+  assert.match(rendered, /Hide verified agents/);
+  assert.match(rendered, /Showing 2 \/ 2 visible · 3 total · 1 hidden · 1 unverified/);
+  assert.match(rendered, /Image/);
+  assert.match(rendered, /First message: C:\\Temp/);
+  assert.match(rendered, /Parent session is missing or unreadable/);
+  assert.doesNotMatch(rendered, /搜索|会话管理|已隐藏|条 ·|首条消息|未核验/);
+  picker.handleInput('订单');
+  assert.match(picker.render(160).join('\n'), /Matches 1 \/ 2 visible/);
+  assert.match(picker.render(160).join('\n'), /用户自定义标题/);
+  assert.equal(fixture[0].name, '');
+  picker.dispose();
 });
 
 test('不可读警告加载完成后保留，重试清空，并忽略过期诊断', async () => {

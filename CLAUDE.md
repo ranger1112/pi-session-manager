@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Pi 扩展（`pi-main-session-manager`）：注册 `/sessions` 和 `/resume-main`，按最近活动列出历史会话并通过 Pi 的会话切换 API 恢复。核心特性是**默认隐藏已核验的子 Agent 会话**，识别依据是 `@tintinweb/pi-subagents` 的持久化格式，而不是 Pi 官方协议。
 
-界面与文档均为简体中文，新增用户可见文案保持中文。
+文档与测试名使用简体中文；界面支持简体中文与英文，新增用户可见文案集中在 `src/i18n.mjs` 并同步两种语言。
 
 ## 常用命令
 
@@ -20,7 +20,7 @@ npm run test:host                         # 宿主检查，使用已安装的 Pi
 node tests/host-smoke.mjs <pi-install-dir> # 或指定本机 Pi 安装目录
 ```
 
-没有构建、lint 或类型检查步骤：`index.ts` 由 Pi 宿主直接加载，`src/*.mjs` 是纯 ESM。测试只依赖 Node 内置模块和临时目录中的合成 JSONL，不读取真实历史。
+没有构建或 lint 步骤；`npm run typecheck` 执行类型检查：`index.ts` 由 Pi 宿主直接加载，`src/*.mjs` 是纯 ESM。测试只依赖 Node 内置模块和临时目录中的合成 JSONL，不读取真实历史。
 
 ## 架构
 
@@ -31,6 +31,8 @@ node tests/host-smoke.mjs <pi-install-dir> # 或指定本机 Pi 安装目录
 - **`src/store.mjs`** — 目录发现（`discover`）、有限并发（`MAX_PARALLEL_READS = 6`）增量读取、基于 `size + mtimeMs` 的进程内缓存。同一遍扫描同时产出列表项与分类证据；父会话即使位于扫描目录之外也会以同样的并发度读取，但**只用于分类，不进列表**。每次列举都会淘汰本次结果之外的缓存。`onDiagnostics` 单独回传不可读条目数，列表接口始终是数组。
 - **`src/sessions.mjs`** — JSONL 流式提取（`readEvidence`）、三条证据的交叉核验（`classifySessions`）、搜索/排序/标题清洗（`selectSessions`、`sessionTitle`、`sessionSearchText`、`cleanText`）。`readEvidence` 逐行 `JSON.parse`，只统计顶层 `type`，大工具结果会被解析但正文不进入缓存。
 - **`src/scope.mjs`** — 用与 Pi 相同的编码（`--<去掉开头斜杠、把 /\\: 换成 ->--`）判断 `sessionDir` 是否就是当前项目的默认目录。若是默认目录，`all` 才递归扫描 `agentDir/sessions`；自定义 `sessionDir` 的 `all` 被限制在该存储内。
+- **`src/i18n.mjs` / `src/preferences.mjs`** — 双语文案、locale 自动选择及独立语言配置。只允许语言命令写 agent 目录下的 `pi-main-session-manager.json`，不修改会话或 Pi settings。
+- **`src/presentation.mjs`** — 选中项详情、项目名与分钟精度时间；原始消息只裁剪显示，不自动翻译或改写。
 - **`src/paths.mjs`** — 唯一的路径规范化入口：`pathKey()` 用于缓存键，`pathsEqual()` 用于所有相等判断（空值与缺失值不算相同）。
 
 ## 关键不变量

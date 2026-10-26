@@ -42,7 +42,7 @@ export function createSessionStore({ readDirectory = readdir } = {}) {
   return {
     get readCount() { return readCount; },
     get cachedCount() { return cache.size; },
-    async list({ directory, recursive = false, cwd, signal, onProgress, onDiagnostics }) {
+    async list({ directory, recursive = false, cwd, signal, onProgress, onDiagnostics, progressText }) {
       let unreadable = 0;
       const files = await discover(directory, { recursive, signal, readDirectory,
         onSkip: () => { unreadable++; } });
@@ -54,7 +54,9 @@ export function createSessionStore({ readDirectory = readdir } = {}) {
           const index = next++;
           try { records[index] = await read(files[index], signal); }
           catch { signal?.throwIfAborted(); unreadable++; }
-          onProgress?.(`读取 ${++loaded}/${files.length}${unreadable ? ` · 跳过不可读 ${unreadable}` : ''}`);
+          loaded++;
+          onProgress?.(progressText ? progressText(loaded, files.length, unreadable)
+            : `读取 ${loaded}/${files.length}${unreadable ? ` · 跳过不可读 ${unreadable}` : ''}`);
         }
       }));
       const available = records.filter(Boolean);

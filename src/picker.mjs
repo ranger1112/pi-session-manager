@@ -1,39 +1,50 @@
 import { cleanText, selectSessions, sessionSearchText, sessionTitle } from './sessions.mjs';
 import { pathsEqual } from './paths.mjs';
+import { textFor } from './i18n.mjs';
+import { projectName, sessionDate, sessionDetails } from './presentation.mjs';
 
 export function createPicker(options) {
   const { primitives: { Input, SelectList, matchesKey, truncateToWidth }, theme, done, load } = options;
-  const input = new Input({ prompt: '搜索 > ' });
+  const language = options.language ?? 'zh-CN', t = textFor(language);
+  const input = new Input({ prompt: t.search });
   let scope = options.scope ?? 'current', showAgents = options.showAgents ?? false;
-  let items = [], filtered = [], list, selectedPath = options.currentPath, listRows;
+  let items = [], filtered = [], list, selectedPath = options.currentPath, listRows, listWidth = 80;
+  let detailRows = 0, hidden = 0, unknown = 0;
   let loading = true, status = '', error = '', unreadable = 0, disposed = false, generation = 0;
   let controller;
   const renderAgain = () => { if (!disposed) options.requestRender(); };
-  const rows = () => Math.max(1, (options.visibleRows?.() ?? 10) - (unreadable ? 1 : 0));
+  const rows = () => {
+    const budget = options.visibleRows?.() ?? 12;
+    detailRows = budget >= 12 ? 7 : budget >= 7 ? 3 : 0;
+    return Math.max(1, budget - detailRows - (unreadable ? 1 : 0));
+  };
   const selectionKey = (data, action, defaults) => options.keybindings
     ? options.keybindings.matches(data, `tui.select.${action}`)
     : defaults.some(key => matchesKey(data, key));
   const keyHint = (action, defaults) => (options.keybindings?.getKeys?.(`tui.select.${action}`) ?? defaults)
-    .join('/') || '未绑定';
+    .join('/') || t.unbound;
   // 标签、描述与搜索文本在加载时构造一次；按键/缩放只做过滤与重排。
   const decorate = item => ({
     ...item,
-    searchText: sessionSearchText(item),
-    label: `${pathsEqual(item.path, options.currentPath) ? '● ' : ''}${item.isSubagent ? '[Agent] ' : ''}${sessionTitle(item)}`,
-    description: `${item.messageCount ?? 0} 条 · ${item.modified.toLocaleDateString()} · ${cleanText(item.cwd)}`,
+    searchText: sessionSearchText(item, t),
+    label: `${pathsEqual(item.path, options.currentPath) ? '● ' : ''}${item.isSubagent ? '[Agent] ' : ''}${sessionTitle(item, t)}`,
+    date: sessionDate(item.modified, language),
   });
   const rebuild = () => {
     filtered = selectSessions(items, { query: input.getValue(), showAgents, sorted: true });
     listRows = rows();
     list = new SelectList(filtered.map(item => ({
-      value: item.path, label: item.label, description: item.description,
+      value: item.path, label: item.label,
+      description: listWidth < 64 ? undefined : scope === 'all'
+        ? `${projectName(item.cwd) || t.unnamedProject} · ${item.date}` : item.date,
     })), listRows, {
       selectedPrefix: text => theme.fg('accent', text),
       selectedText: text => theme.fg('accent', text),
       description: text => theme.fg('muted', text),
       scrollInfo: text => theme.fg('muted', text),
       noMatch: text => theme.fg('warning', text),
-    });
+    }, { minPrimaryColumnWidth: Math.max(1, Math.floor(listWidth * 0.6)),
+      maxPrimaryColumnWidth: Math.max(1, Math.floor(listWidth * 0.6)) });
     const index = filtered.findIndex(item => pathsEqual(item.path, selectedPath));
     if (index >= 0) list.setSelectedIndex(index);
     list.onSelectionChange = item => { selectedPath = item.value; };
@@ -48,7 +59,8 @@ export function createPicker(options) {
     controller?.abort();
     controller = new AbortController();
     const signal = controller.signal, token = ++generation;
-    loading = true; status = ''; error = ''; unreadable = 0; items = []; rebuild(); renderAgain();
+    loading = true; status = ''; error = ''; unreadable = 0; hidden = 0; unknown = 0;
+    items = []; rebuild(); renderAgain();
     try {
       const loaded = await load(scope, signal, text => {
         if (token !== generation || disposed) return;
@@ -59,6 +71,8 @@ export function createPicker(options) {
       });
       if (disposed || token !== generation) return;
       items = loaded.map(decorate).sort((a, b) => b.modified.getTime() - a.modified.getTime());
+      hidden = items.filter(item => item.isSubagent).length;
+      unknown = items.filter(item => item.classification === 'unknown').length;
       loading = false; rebuild(); renderAgain();
     } catch (cause) {
       if (disposed || token !== generation) return;
@@ -71,23 +85,33 @@ export function createPicker(options) {
     get focused() { return input.focused; },
     set focused(value) { input.focused = value; },
     render(width) {
-      if (listRows !== rows()) rebuild();
+      const widthChanged = listWidth !== width;
+      listWidth = width;
+      if (widthChanged || listRows !== rows()) rebuild();
       const border = theme.fg('accent', '─'.repeat(Math.max(0, width)));
-      const hidden = showAgents ? 0 : items.filter(item => item.isSubagent).length;
-      const unknown = items.filter(item => item.classification === 'unknown').length;
-      const title = `会话管理 · ${scope === 'current' ? '当前目录' : '所有目录'} · ${showAgents ? '全部会话' : '仅主会话'}`;
-      const count = `${items.length} 个会话 · 已隐藏 ${hidden}${unknown ? ` · 未核验 ${unknown}（保留）` : ''}`;
+      const title = `${t.title} · ${scope === 'current' ? t.current : t.all} · ${showAgents ? t.allSessions : t.hideAgents}`;
+      const count = loading ? '—' : t.counts(filtered.length, items.length - (showAgents ? 0 : hidden),
+        items.length, showAgents ? 0 : hidden, unknown, Boolean(input.getValue().trim()));
       const lines = [border, theme.fg('accent', theme.bold(title)),
         theme.fg('muted', count), ...input.render(width), ''];
-      if (!loading && unreadable) lines.push(theme.fg('warning', `已跳过 ${unreadable} 个不可读会话文件或目录，列表可能不完整`));
-      if (loading) lines.push(theme.fg('muted', `加载中… ${status}`));
-      else if (error) lines.push(theme.fg('error', `读取失败：${error}`));
-      else if (!list?.getSelectedItem()) lines.push(theme.fg('muted', '没有匹配的会话'));
-      else lines.push(...list.render(width));
+      if (!loading && unreadable) lines.push(theme.fg('warning', t.unreadable(unreadable)));
+      if (loading) lines.push(theme.fg('muted', `${t.loading} ${status}`));
+      else if (error) lines.push(theme.fg('error', `${t.readError}: ${error}`));
+      else if (!list?.getSelectedItem()) lines.push(theme.fg('muted', t.empty));
+      else {
+        lines.push(...list.render(width));
+        const selected = filtered.find(item => pathsEqual(item.path, selectedPath));
+        if (selected && detailRows) {
+          const details = sessionDetails(selected, language);
+          lines.push(theme.fg('muted', '─'.repeat(Math.max(0, width))));
+          const shown = detailRows === 3 ? [details[0], details[4]] : details;
+          lines.push(...shown.map((line, i) => theme.fg(i === 0 ? 'accent' : 'muted', line)));
+        }
+      }
       const confirm = keyHint('confirm', ['Enter']), cancel = keyHint('cancel', ['Esc']);
       const up = keyHint('up', ['↑']), down = keyHint('down', ['↓']);
-      lines.push('', theme.fg('muted', `${confirm} 恢复 · ${up}/${down} 选择 · Tab 目录范围`),
-        theme.fg('muted', `Ctrl+A 主会话/全部 · Ctrl+R 刷新 · ${cancel} 关闭`), border);
+      lines.push('', theme.fg('muted', `${confirm} ${t.resume} · ${up}/${down} ${t.choose} · Tab ${t.scope}`),
+        theme.fg('muted', `Ctrl+A ${t.toggle} · Ctrl+R ${t.refresh} · ${cancel} ${t.close}`), border);
       return lines.map(line => truncateToWidth(line, width));
     },
     handleInput(data) {

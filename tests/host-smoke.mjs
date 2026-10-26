@@ -1,9 +1,13 @@
 // 宿主检查：默认使用项目安装的 Pi 包，也可传入本机 Pi 安装目录；只使用合成会话。
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, writeFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { createPicker } from '../src/picker.mjs';
+import { textFor } from '../src/i18n.mjs';
+import { saveLanguage } from '../src/preferences.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -29,6 +33,12 @@ const tui = await import(pathToFileURL(tuiEntry).href);
 const { initTheme, getThemeByName } = await fromHost('dist/modes/interactive/theme/theme.js');
 initTheme('dark', false);
 const theme = getThemeByName('dark');
+// 隔离语言偏好测试，不读取或修改个人配置。
+const temporaryAgent = await mkdtemp(join(tmpdir(), 'pi-host-language-'));
+const oldAgentDir = process.env.PI_CODING_AGENT_DIR;
+process.env.PI_CODING_AGENT_DIR = temporaryAgent;
+try {
+await saveLanguage(temporaryAgent, 'zh-CN');
 const loaded = await loadExtensions([join(root, 'index.ts')], root);
 assert.deepEqual(loaded.errors, []);
 const extension = loaded.extensions[0];
@@ -98,7 +108,7 @@ rows = 3;
 assert.equal(visibleRecords(), 3); // resize 不依赖 invalidate
 picker.handleInput('\u001b[5~'); // PageUp: 6 -> 3
 rows = 8;
-assert.equal(visibleRecords(), 8);
+assert.equal(visibleRecords(), 6); // 五行列表加选中项标题
 picker.handleInput('\r');
 assert.deepEqual(paged, ['/session-3']);
 
@@ -150,4 +160,45 @@ for (const width of [16, 40, 88, 140]) {
   for (const line of picker.render(width)) assert.ok(tui.visibleWidth(line) <= width);
 }
 picker.dispose();
-console.log('PASS: Pi 原生加载、命令保护/恢复/取消/异常、真实 TUI 输入/宽度/IME焦点/分页/缩放/重绑键位/扫描警告');
+await command.handler('lang en', ctx);
+assert.ok(notify.some(([message]) => message.includes('Interface language set to en')));
+await command.handler('', { ...ctx, mode: 'rpc' });
+assert.equal(notify.at(-1)[0], textFor('en').tuiOnly);
+await command.handler('lang auto', ctx);
+
+const previews = [];
+for (const language of ['zh-CN', 'en']) {
+  const selections = [];
+  picker = createPicker({ primitives: tui, theme, language, requestRender() {}, done: value => selections.push(value),
+    visibleRows: () => 20, load: async () => [
+      { ...main, name: '', firstMessage: 'C:\\Temp\\pi-clipboard-ab12.png',
+        classification: 'unknown', classificationReason: 'parentUnavailable' },
+      { ...main, path: '/example/other.jsonl', name: '用户命名 Keep my title', cwd: '/work/another-project' }, agent,
+    ] });
+  await flush();
+  picker.focused = true;
+  const text = picker.render(120).join('\n');
+  assert.match(text, language === 'en' ? /Parent session is missing or unreadable/ : /父会话缺失或无法读取/);
+  assert.match(text, language === 'en' ? /Showing 2 \/ 2 visible/ : /显示 2 \/ 可见 2/);
+  assert.match(text, /11:58|\d{2}:\d{2}/);
+  for (const width of [16, 40, 88, 120, 160]) {
+    for (const line of picker.render(width)) assert.ok(tui.visibleWidth(line) <= width);
+  }
+  previews.push(`\n=== ${language} / current ===\n${picker.render(120).join('\n')}`);
+  picker.handleInput('\u001b[B');
+  assert.match(picker.render(120).join('\n'), /用户命名 Keep my title/);
+  picker.handleInput('\t');
+  await flush();
+  const allView = picker.render(120).join('\n');
+  assert.match(allView, /another-project/);
+  previews.push(`\n=== ${language} / all ===\n${allView}`);
+  picker.handleInput('\r');
+  assert.deepEqual(selections, ['/example/other.jsonl']);
+}
+if (process.env.PI_SESSION_PREVIEW) writeFileSync(process.env.PI_SESSION_PREVIEW, previews.join('\n'));
+console.log('PASS: Pi 原生加载、语言设置/通知、真实 TUI 双语/详情/分页/缩放/重绑键位/扫描警告');
+} finally {
+  if (oldAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = oldAgentDir;
+  await rm(temporaryAgent, { recursive: true, force: true });
+}

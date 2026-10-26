@@ -6,13 +6,30 @@ import { pathKey } from './paths.mjs';
 export const cleanText = value => String(value ?? '').replace(/[\r\n\t]+/g, ' ')
   .replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim();
 
-export function sessionTitle(item) {
-  return cleanText(item.name) || cleanText(item.firstMessage) || basename(item.path, '.jsonl');
+// 只把整条消息均为单个附件路径的情况当作附件，不误改普通文字中的路径。
+export function attachmentName(message) {
+  const value = String(message ?? '').trim().replace(/^"(.*)"$/, '$1');
+  if (!/^(?:[a-z]:[/\\]|\/|file:\/\/)/i.test(value)
+      || /[\r\n]/.test(value)
+      || !/\.(?:png|jpe?g|gif|webp|bmp|svg|pdf|txt|csv|docx?|xlsx?|pptx?|zip)$/i.test(value)) return undefined;
+  return value.split(/[/\\]/).at(-1);
+}
+
+export function sessionTitle(item, { image = '图片', attachment = '附件' } = {}) {
+  if (cleanText(item.name)) return cleanText(item.name);
+  const file = attachmentName(item.firstMessage);
+  if (file) {
+    const isImage = /\.(?:png|jpe?g|gif|webp|bmp|svg)$/i.test(file);
+    // 剪贴板临时文件的 UUID 无助于辨认，把原路径留在详情预览。
+    if (/^pi-clipboard-[\da-f-]+\.(?:png|jpe?g|gif|webp|bmp)$/i.test(file)) return image;
+    return `${isImage ? image : attachment}: ${cleanText(file)}`;
+  }
+  return cleanText(item.firstMessage) || basename(item.path, '.jsonl');
 }
 
 // 搜索文本只在加载时构造一次，供选择器在每次按键时复用。
-export function sessionSearchText(item) {
-  return `${sessionTitle(item)} ${item.cwd ?? ''} ${item.firstMessage ?? ''}`.toLocaleLowerCase();
+export function sessionSearchText(item, labels) {
+  return `${sessionTitle(item, labels)} ${item.cwd ?? ''} ${item.firstMessage ?? ''}`.toLocaleLowerCase();
 }
 
 export function selectSessions(items, { query = '', showAgents = false, sorted = false } = {}) {
@@ -82,21 +99,26 @@ export async function classifySessions(items, { signal, onProgress, evidence } =
   const result = [];
   for (const item of items) {
     signal?.throwIfAborted();
-    let classification = 'user';
+    let classification = 'user', classificationReason = item.parentSessionPath ? 'ordinaryBranch' : 'noParent';
     if (item.parentSessionPath) {
       try {
         const child = await read(item.path);
         if (typeof child.initialName === 'string' && /#[a-f0-9]{8}$/i.test(child.initialName)) {
+          classificationReason = 'parentUnavailable';
           const parent = await read(item.parentSessionPath);
-          if (parent.calls.has(child.initialName)) classification = 'subagent';
-          else classification = 'unknown';
+          if (parent.calls.has(child.initialName)) {
+            classification = 'subagent'; classificationReason = 'verified';
+          } else {
+            classification = 'unknown'; classificationReason = 'noMatchingCall';
+          }
         }
       } catch {
         signal?.throwIfAborted();
         classification = 'unknown';
+        if (classificationReason !== 'parentUnavailable') classificationReason = 'childUnavailable';
       }
     }
-    result.push({ ...item, classification, isSubagent: classification === 'subagent' });
+    result.push({ ...item, classification, classificationReason, isSubagent: classification === 'subagent' });
     onProgress?.(result.length, items.length);
   }
   return result;
