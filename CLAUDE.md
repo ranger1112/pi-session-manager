@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Pi 扩展（`pi-main-session-manager`）：注册 `/sessions` 和 `/resume-main`，按最近活动列出历史会话并通过 Pi 的会话切换 API 恢复。核心特性是**默认隐藏已核验的子 Agent 会话**，识别依据是 `@tintinweb/pi-subagents` 的持久化格式，而不是 Pi 官方协议。
+Pi 扩展（`pi-main-session-manager`）：注册主命令 `/session-manager`，保留 `/sessions` 和 `/resume-main` 兼容别名，按最近活动列出历史会话并通过 Pi 的会话切换 API 恢复。核心特性是**默认隐藏已核验的子 Agent 会话**，识别依据是 `@tintinweb/pi-subagents` 的持久化格式，而不是 Pi 官方协议。
 
 文档与测试名使用简体中文；界面支持简体中文与英文，新增用户可见文案集中在 `src/i18n.mjs` 并同步两种语言。
 

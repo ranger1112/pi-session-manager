@@ -7,7 +7,7 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { createPicker } from '../src/picker.mjs';
 import { textFor } from '../src/i18n.mjs';
-import { saveLanguage } from '../src/preferences.mjs';
+import { readLanguage, saveLanguage } from '../src/preferences.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -42,8 +42,15 @@ await saveLanguage(temporaryAgent, 'zh-CN');
 const loaded = await loadExtensions([join(root, 'index.ts')], root);
 assert.deepEqual(loaded.errors, []);
 const extension = loaded.extensions[0];
-assert.deepEqual([...extension.commands.keys()].sort(), ['resume-main', 'sessions']);
-const command = extension.commands.get('sessions');
+assert.deepEqual([...extension.commands.keys()], ['session-manager', 'sessions', 'resume-main']);
+assert.equal(extension.commands.has('session'), false);
+assert.equal(extension.commands.has('resume'), false);
+const command = extension.commands.get('session-manager');
+for (const name of ['sessions', 'resume-main']) {
+  const alias = extension.commands.get(name);
+  assert.equal(alias.handler, command.handler);
+  assert.equal(alias.description, textFor('zh-CN').commandAlias);
+}
 let picker, switched, notify = [];
 const main = { path: '/example/main.jsonl', cwd: '/example/project', name: '示例会话与中文输入',
   modified: new Date(), messageCount: 15 };
@@ -61,8 +68,11 @@ const ctx = {
     return { cancelled: false };
   },
 };
-await command.handler('', ctx);
-assert.equal(switched, main.path);
+for (const name of ['session-manager', 'sessions', 'resume-main']) {
+  switched = undefined;
+  await extension.commands.get(name).handler('all agents', ctx);
+  assert.equal(switched, main.path, `${name} 应继续使用原会话切换路径`);
+}
 await command.handler('', { ...ctx, mode: 'rpc' });
 assert.ok(notify.some(([message]) => message.includes('交互式')));
 switched = undefined;
@@ -160,11 +170,21 @@ for (const width of [16, 40, 88, 140]) {
   for (const line of picker.render(width)) assert.ok(tui.visibleWidth(line) <= width);
 }
 picker.dispose();
+await command.handler('lang invalid', ctx);
+assert.equal(notify.at(-1)[0], textFor('zh-CN').languageUsage);
+assert.equal(await readLanguage(temporaryAgent), 'zh-CN');
 await command.handler('lang en', ctx);
 assert.ok(notify.some(([message]) => message.includes('Interface language set to en')));
 await command.handler('', { ...ctx, mode: 'rpc' });
 assert.equal(notify.at(-1)[0], textFor('en').tuiOnly);
+for (const name of ['sessions', 'resume-main']) {
+  await extension.commands.get(name).handler('lang zh-CN', ctx);
+  assert.equal(await readLanguage(temporaryAgent), 'zh-CN');
+  await extension.commands.get(name).handler('lang en', ctx);
+  assert.equal(await readLanguage(temporaryAgent), 'en');
+}
 await command.handler('lang auto', ctx);
+assert.equal(await readLanguage(temporaryAgent), 'auto');
 
 const previews = [];
 for (const language of ['zh-CN', 'en']) {
@@ -196,7 +216,7 @@ for (const language of ['zh-CN', 'en']) {
   assert.deepEqual(selections, ['/example/other.jsonl']);
 }
 if (process.env.PI_SESSION_PREVIEW) writeFileSync(process.env.PI_SESSION_PREVIEW, previews.join('\n'));
-console.log('PASS: Pi 原生加载、语言设置/通知、真实 TUI 双语/详情/分页/缩放/重绑键位/扫描警告');
+console.log('PASS: Pi 原生加载、session-manager/兼容别名/语言设置、真实 TUI 双语/详情/分页/缩放/重绑键位/扫描警告');
 } finally {
   if (oldAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
   else process.env.PI_CODING_AGENT_DIR = oldAgentDir;

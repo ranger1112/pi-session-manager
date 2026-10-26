@@ -66,9 +66,9 @@ export async function browseSessions(args: string, ctx: ExtensionCommandContext)
 
 export default async function sessionManager(pi: ExtensionAPI) {
   const t = textFor(await interfaceLanguage(getAgentDir()));
-  for (const name of ['sessions', 'resume-main']) {
+  for (const name of ['session-manager', 'sessions', 'resume-main']) {
     pi.registerCommand(name, {
-      description: t.command,
+      description: name === 'session-manager' ? t.command : t.commandAlias,
       handler: browseSessions,
     });
   }

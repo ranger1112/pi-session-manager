@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.19.0-brightgreen)](package.json)
 
-在 Pi 中输入 `/sessions`，默认隐藏已核验的子 Agent 会话，按最近活动平铺显示历史。无需删除历史，也不必关闭子 Agent 的持久化。
+在 Pi 中输入 `/session-manager`，默认隐藏已核验的子 Agent 会话，按最近活动平铺显示历史。无需删除历史，也不必关闭子 Agent 的持久化。
 
 使用 Pi 原生输入框和选择列表，支持搜索、当前项目／所有项目切换，以及直接恢复原始会话。
 
@@ -24,7 +24,7 @@ pi install git:github.com/ranger1112/pi-session-manager
 pi install git:github.com/ranger1112/pi-session-manager#v0.1.0
 ```
 
-本插件注册 `/sessions` 和 `/resume-main`，不会替换原生 `/resume` 或 `pi -r`。不要同时启用其他注册 `/sessions` 的扩展。
+主命令为 `/session-manager`，保留 `/sessions` 和 `/resume-main` 作为兼容别名，三者接受相同参数。不会替换 Pi 内置的 `/session`（会话信息）、`/resume` 或 `pi -r`。不要同时启用其他注册这些插件命令的扩展。
 
 ## 兼容性
 
@@ -38,14 +38,15 @@ pi install git:github.com/ranger1112/pi-session-manager#v0.1.0
 ## 使用
 
 ```text
-/sessions              当前项目，默认隐藏已核验的子 Agent
-/sessions all          所有项目，默认隐藏已核验的子 Agent
-/sessions agents       当前项目，包含子 Agent
-/sessions all agents   所有项目，包含子 Agent
-/resume-main           /sessions 的别名
-/sessions lang zh-CN    界面固定为简体中文
-/sessions lang en       界面固定为英文
-/sessions lang auto     恢复自动语言选择
+/session-manager              当前项目，默认隐藏已核验的子 Agent
+/session-manager all          所有项目，默认隐藏已核验的子 Agent
+/session-manager agents       当前项目，包含子 Agent
+/session-manager all agents   所有项目，包含子 Agent
+/session-manager lang zh-CN    界面固定为简体中文
+/session-manager lang en       界面固定为英文
+/session-manager lang auto     恢复自动语言选择
+/sessions                     /session-manager 的兼容别名
+/resume-main                  /session-manager 的兼容别名
 ```
 
 | 操作 | 按键 |
@@ -69,7 +70,7 @@ pi install git:github.com/ranger1112/pi-session-manager#v0.1.0
 
 ### 界面语言
 
-`auto` 按 `LC_ALL` → `LC_MESSAGES` → `LANG` → 系统 locale 的顺序检测；中文 locale 使用 `zh-CN`，其他或无法识别的 locale 使用英文。现有中文用户可用 `/sessions lang zh-CN` 固定中文。
+`auto` 按 `LC_ALL` → `LC_MESSAGES` → `LANG` → 系统 locale 的顺序检测；中文 locale 使用 `zh-CN`，其他或无法识别的 locale 使用英文。现有中文用户可用 `/session-manager lang zh-CN` 固定中文。
 
 语言偏好保存在 Pi agent 目录的 `pi-main-session-manager.json`，不修改 Pi 的 `settings.json`，也不写入会话文件。设置后下次打开选择器即生效；命令描述在 `/reload` 或重启后更新。标题、消息、路径、Agent 类型与底层错误原文不翻译。
 
@@ -110,7 +111,7 @@ Pi 的 `parentSession` 只说明父子关联，手动 `/fork`、`/clone` 也会�
 
 **某些子 Agent 会话仍然显示？** 识别只针对 `@tintinweb/pi-subagents` 的特定持久化格式。父记录缺失、名称被定制或工具结果不完整时无法核验，会保留显示并计入“未核验”；可用 `Ctrl+A` 查看完整列表。
 
-**`/sessions` 没有生效？** 需要交互式 TUI 且会话空闲；不要同时启用其他注册 `/sessions` 的扩展。
+**`/session-manager` 没有生效？** 更新插件后运行 `/reload`，需要交互式 TUI 且会话空闲；不要同时启用其他注册 `/session-manager`、`/sessions` 或 `/resume-main` 的扩展。
 
 **“所有项目”只显示了一部分？** 使用自定义会话存储时，“所有项目”被限制在该存储内，不会扩展到默认存储。
 

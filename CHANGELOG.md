@@ -6,7 +6,8 @@
 
 ### Added
 
-- 中英双语界面，自动检测 locale，使用 `/sessions lang zh-CN|en|auto` 保存独立语言偏好。
+- 主命令改为 `/session-manager`，保留 `/sessions` 和 `/resume-main` 兼容别名，不占用 Pi 内置 `/session`。
+- 中英双语界面，自动检测 locale，使用 `/session-manager lang zh-CN|en|auto` 保存独立语言偏好。
 - 自适应高度的选中项详情，显示首条消息、目录、分钟精度时间和分类原因。
 - 合成 1,000 / 10,000 会话的读取、缓存、搜索和取消性能基线。
 

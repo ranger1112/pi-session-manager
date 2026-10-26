@@ -2,7 +2,7 @@
 
 ## 模块
 
-- `index.ts`：注册命令，选择存储范围，通过 Pi API 恢复会话。
+- `index.ts`：注册 `/session-manager` 主命令与 `/sessions`、`/resume-main` 兼容别名，共用处理函数和语言偏好；不注册内置 `/session` 或 `/resume`，通过 Pi API 恢复会话。
 - `src/picker.mjs`：原生 TUI 输入框与列表，搜索、范围切换、取消和过期加载保护。
 - `src/scope.mjs`：精确比较当前项目的默认存储目录，限制自定义存储范围。
 - `src/store.mjs`：流式扫描、有限并发读取、基于大小／修改时间的进程内缓存。
