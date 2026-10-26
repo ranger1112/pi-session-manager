@@ -25,13 +25,21 @@ test('一次读取提取列表与分类证据，重复加载复用缓存，文�
     assert.equal(result.length, 2);
     assert.equal(result.find(s => s.path === child).isSubagent, true);
     assert.equal(result.find(s => s.path === parent).firstMessage, '处理订单');
+    assert.equal(result.find(s => s.path === parent).firstRequest, '处理订单');
+    assert.equal(result.find(s => s.path === parent).latestRequest, '处理订单');
+    assert.equal(result.find(s => s.path === parent).attachments.images, 0);
     assert.equal(result.find(s => s.path === parent).messageCount, 2);
     assert.equal(store.readCount, 2);
     await store.list({ directory: dir });
     assert.equal(store.readCount, 2);
-    await appendFile(parent, JSON.stringify({ type: 'session_info', name: '新名字' }) + '\n');
+    await appendFile(parent, [
+      { type: 'session_info', name: '新名字' },
+      { type: 'message', message: { role: 'user', content: '处理退货' } },
+    ].map(JSON.stringify).join('\n') + '\n');
     result = await store.list({ directory: dir });
     assert.equal(result.find(s => s.path === parent).name, '新名字');
+    assert.equal(result.find(s => s.path === parent).firstRequest, '处理订单');
+    assert.equal(result.find(s => s.path === parent).latestRequest, '处理退货');
     assert.equal(store.readCount, 3);
     assert.equal((await store.list({ directory: root, recursive: true })).length, 2);
     assert.equal((await store.list({ directory: dir, cwd: '/other' })).length, 0);

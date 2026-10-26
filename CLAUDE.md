@@ -29,10 +29,11 @@ node tests/host-smoke.mjs <pi-install-dir> # 或指定本机 Pi 安装目录
 - **`index.ts`** — Pi 扩展入口。检查 `ctx.mode === 'tui'` 与 `ctx.isIdle()`，解析 `all` / `agents` 参数，把 `Input`/`SelectList` 等 TUI 原语和 load 回调注入 picker，最后调用 `ctx.switchSession(target, ...)`。模块级单例 `store` 承载缓存。
 - **`src/picker.mjs`** — 自绘 TUI 组件（`createPicker`）。持有搜索框、当前范围、`loading/error/unreadable` 状态和 `generation` 计数；每次范围切换或刷新都 abort 旧请求并以代数丢弃过期回调。加载完成时预计算 `searchText`/`label`/`description` 并排序，后续按键与缩放只做过滤和重排。分页由自己按可见行数实现，不依赖宿主 `SelectList` 的分页。UI 原语通过参数注入，测试才能用假的 `Input`/`SelectList`。
 - **`src/store.mjs`** — 目录发现（`discover`）、有限并发（`MAX_PARALLEL_READS = 6`）增量读取、基于 `size + mtimeMs` 的进程内缓存。同一遍扫描同时产出列表项与分类证据；父会话即使位于扫描目录之外也会以同样的并发度读取，但**只用于分类，不进列表**。每次列举都会淘汰本次结果之外的缓存。`onDiagnostics` 单独回传不可读条目数，列表接口始终是数组。
-- **`src/sessions.mjs`** — JSONL 流式提取（`readEvidence`）、三条证据的交叉核验（`classifySessions`）、搜索/排序/标题清洗（`selectSessions`、`sessionTitle`、`sessionSearchText`、`cleanText`）。`readEvidence` 逐行 `JSON.parse`，只统计顶层 `type`，大工具结果会被解析但正文不进入缓存。
+- **`src/sessions.mjs`** — JSONL 流式提取（`readEvidence`）、三条证据的交叉核验（`classifySessions`）、搜索/排序/标题清洗（`selectSessions`、`sessionTitle`、`sessionSearchText`、`cleanText`）。`readEvidence` 逐行 `JSON.parse`，只统计顶层 `type`，大工具结果会被解析但正文不进入缓存。首消息和首末有效用户请求分别限 600 字符，附件元数据有界；正常名称不变，仅路径式名称使用上下文标题。
 - **`src/scope.mjs`** — 用与 Pi 相同的编码（`--<去掉开头斜杠、把 /\\: 换成 ->--`）判断 `sessionDir` 是否就是当前项目的默认目录。若是默认目录，`all` 才递归扫描 `agentDir/sessions`；自定义 `sessionDir` 的 `all` 被限制在该存储内。
 - **`src/i18n.mjs` / `src/preferences.mjs`** — 双语文案、locale 自动选择及独立语言配置。只允许语言命令写 agent 目录下的 `pi-main-session-manager.json`，不修改会话或 Pi settings。
-- **`src/presentation.mjs`** — 选中项详情、项目名与分钟精度时间；原始消息只裁剪显示，不自动翻译或改写。
+- **`src/presentation.mjs`** — 选中项详情优先展示起始请求/最近提问/附件计数，再展示项目和分类；原始路径放末尾，不自动翻译或改写。
+- **`src/attachments.mjs`** — 分离绝对附件路径和用户文字，支持多路径/带引号空格路径/图片块；不打开附件、不缓存图片数据。
 - **`src/paths.mjs`** — 唯一的路径规范化入口：`pathKey()` 用于缓存键，`pathsEqual()` 用于所有相等判断（空值与缺失值不算相同）。
 
 ## 关键不变量

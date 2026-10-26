@@ -15,7 +15,7 @@ test('详情显示分类原因与原文，清理控制字符而不修改输入�
     modified: new Date(2026, 9, 26, 14, 37), messageCount: 8, classification: 'unknown', classificationReason: 'noMatchingCall' };
   const details = sessionDetails(item, 'en');
   assert.equal(details[0], '用户标题');
-  assert.equal(details[1], 'First message: first message');
+  assert.equal(details[1], 'Initial request: first message');
   assert.match(details[4], /No matching Agent call in the parent/);
   assert.equal(details[5], 'Session file: /sessions/main.jsonl');
   assert.equal(item.firstMessage, 'first\nmessage');

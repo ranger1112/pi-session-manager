@@ -35,6 +35,8 @@ export function createSessionStore({ readDirectory = readdir } = {}) {
         cwd: typeof evidence.header.cwd === 'string' ? evidence.header.cwd : '',
         parentSessionPath: typeof evidence.header.parentSession === 'string' ? evidence.header.parentSession : undefined,
         name: evidence.name, firstMessage: evidence.firstMessage,
+        firstRequest: evidence.firstRequest, latestRequest: evidence.latestRequest,
+        attachments: evidence.attachments,
         messageCount: evidence.messageCount, modified: new Date(time) } };
     cache.set(id, record);
     return record;

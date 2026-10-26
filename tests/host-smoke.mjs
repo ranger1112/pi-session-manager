@@ -191,7 +191,10 @@ for (const language of ['zh-CN', 'en']) {
   const selections = [];
   picker = createPicker({ primitives: tui, theme, language, requestRender() {}, done: value => selections.push(value),
     visibleRows: () => 20, load: async () => [
-      { ...main, name: '', firstMessage: 'C:\\Temp\\pi-clipboard-ab12.png',
+      { ...main, name: 'C:\\Temp\\pi-clipboard-ab12.png C:\\Temp\\pi-clipboard-cd34.png',
+        firstMessage: 'C:\\Temp\\pi-clipboard-ab12.png C:\\Temp\\pi-clipboard-cd34.png',
+        firstRequest: '飞书同步价格没有更新', latestRequest: '已有订单受影响吗？',
+        attachments: { images: 2, files: 0, names: ['pi-clipboard-ab12.png', 'pi-clipboard-cd34.png'] },
         classification: 'unknown', classificationReason: 'parentUnavailable' },
       { ...main, path: '/example/other.jsonl', name: '用户命名 Keep my title', cwd: '/work/another-project' }, agent,
     ] });
@@ -200,7 +203,10 @@ for (const language of ['zh-CN', 'en']) {
   const text = picker.render(120).join('\n');
   assert.match(text, language === 'en' ? /Parent session is missing or unreadable/ : /父会话缺失或无法读取/);
   assert.match(text, language === 'en' ? /Showing 2 \/ 2 visible/ : /显示 2 \/ 可见 2/);
-  assert.match(text, /11:58|\d{2}:\d{2}/);
+  assert.match(text, /\d{2}:\d{2}/);
+  assert.match(text, /\[(?:图片|Image) ×2\] 飞书同步价格没有更新/);
+  assert.match(text, language === 'en' ? /Initial request: 飞书同步价格没有更新/ : /起始请求: 飞书同步价格没有更新/);
+  assert.match(text, language === 'en' ? /Latest prompt: 已有订单受影响吗/ : /最近提问: 已有订单受影响吗/);
   for (const width of [16, 40, 88, 120, 160]) {
     for (const line of picker.render(width)) assert.ok(tui.visibleWidth(line) <= width);
   }

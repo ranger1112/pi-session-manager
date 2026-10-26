@@ -138,15 +138,49 @@ test('用户消息含 null 或非文本块时仍提取文本并正常计数', as
 });
 
 test('附件标题保留命名优先，支持 Windows/POSIX/引号路径并保留搜索原文', () => {
-  const temp = item('/image.jsonl', { name: '', firstMessage: 'C:\\Temp\\pi-clipboard-ab12-34cd.png' });
-  assert.equal(sessions.sessionTitle(temp), '图片');
-  assert.equal(sessions.sessionTitle(temp, { image: 'Image' }), 'Image');
-  assert.match(sessions.sessionSearchText(temp, { image: 'Image' }), /^image /);
+  const temp = item('/image.jsonl', { name: '', firstMessage: 'C:\\Temp\\pi-clipboard-ab12-34cd.png',
+    modified: new Date(2026, 9, 22, 9, 5) });
+  assert.equal(sessions.sessionTitle(temp), '[图片] 10/22 09:05');
+  assert.equal(sessions.sessionTitle(temp, { image: 'Image' }), '[Image] 10/22 09:05');
+  assert.match(sessions.sessionSearchText(temp, { image: 'Image' }), /^\[image\]/);
   assert.equal(sessions.sessionTitle({ ...temp, name: '自己的标题' }), '自己的标题');
-  assert.equal(sessions.sessionTitle({ ...temp, firstMessage: '"/tmp/annual report.pdf"' }), '附件: annual report.pdf');
-  assert.equal(sessions.sessionTitle({ ...temp, firstMessage: '/tmp/design.png' }), '图片: design.png');
-  assert.equal(sessions.sessionTitle({ ...temp, firstMessage: '请检查 /tmp/design.png' }), '请检查 /tmp/design.png');
+  assert.equal(sessions.sessionTitle({ ...temp, firstMessage: '"/tmp/annual report.pdf"' }), '[附件] annual report.pdf');
+  assert.equal(sessions.sessionTitle({ ...temp, firstMessage: '/tmp/design.png' }), '[图片] design.png');
+  assert.equal(sessions.sessionTitle({ ...temp, firstMessage: '请检查 /tmp/design.png' }), '[图片] 请检查');
   assert.equal(sessions.selectSessions([temp], { query: 'ab12' }).length, 1);
+});
+
+test('图片开头后续有效请求与最近提问分别提取，首消息不被替换', async () => {
+  await fixture(async file => {
+    const opening = 'C:\\Temp\\pi-clipboard-ab12.png C:\\Temp\\pi-clipboard-cd34.png';
+    const user = content => ({ type: 'message', message: { role: 'user', content } });
+    const path = await file('context', [header('context'), named(opening), user(opening),
+      user('飞书同步价格没有更新'),
+      { type: 'message', message: { role: 'assistant', content: '不能使用这个回复作用户标题' } },
+      user('/tmp/extra.pdf 已有订单受影响吗？'), user([{ type: 'image', data: 'secret' }]),
+    ]);
+    const evidence = await sessions.readEvidence(path);
+    assert.equal(evidence.firstMessage, opening);
+    assert.equal(evidence.firstRequest, '飞书同步价格没有更新');
+    assert.equal(evidence.latestRequest, '已有订单受影响吗？');
+    assert.equal(evidence.attachments.images, 2);
+    assert.equal(sessions.sessionTitle({ path, ...evidence }), '[图片 ×2] 飞书同步价格没有更新');
+    assert.doesNotMatch(JSON.stringify(evidence), /secret/);
+  });
+});
+
+test('纯图片块开头仍保留附件类型，后续请求最多缓存600字', async () => {
+  await fixture(async file => {
+    const path = await file('image-block', [header('image-block'),
+      { type: 'message', message: { role: 'user', content: [{ type: 'image', data: 'secret' }] } },
+      { type: 'message', message: { role: 'user', content: '分析库存'.repeat(300) } },
+    ]);
+    const evidence = await sessions.readEvidence(path);
+    assert.equal(evidence.firstMessage, '');
+    assert.equal(evidence.attachments.images, 1);
+    assert.equal(evidence.firstRequest.length, 600);
+    assert.equal(evidence.latestRequest.length, 600);
+  });
 });
 
 test('分类原因区分父记录不可读、调用不匹配、正常分支和核验成功，不改变隐藏规则', async () => {

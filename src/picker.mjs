@@ -15,7 +15,7 @@ export function createPicker(options) {
   const renderAgain = () => { if (!disposed) options.requestRender(); };
   const rows = () => {
     const budget = options.visibleRows?.() ?? 12;
-    detailRows = budget >= 12 ? 7 : budget >= 7 ? 3 : 0;
+    detailRows = budget >= 12 ? Math.min(10, budget - 5) : budget >= 7 ? 3 : 0;
     return Math.max(1, budget - detailRows - (unreadable ? 1 : 0));
   };
   const selectionKey = (data, action, defaults) => options.keybindings
@@ -104,7 +104,9 @@ export function createPicker(options) {
         if (selected && detailRows) {
           const details = sessionDetails(selected, language);
           lines.push(theme.fg('muted', '─'.repeat(Math.max(0, width))));
-          const shown = detailRows === 3 ? [details[0], details[4]] : details;
+          const shown = detailRows === 3
+            ? [details[0], details.find(line => line.startsWith(`${t.details}:`))]
+            : details.slice(0, detailRows - 1);
           lines.push(...shown.map((line, i) => theme.fg(i === 0 ? 'accent' : 'muted', line)));
         }
       }

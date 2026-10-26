@@ -3,33 +3,42 @@ import { createInterface } from 'node:readline';
 import { basename } from 'node:path';
 import { pathKey } from './paths.mjs';
 
-export const cleanText = value => String(value ?? '').replace(/[\r\n\t]+/g, ' ')
-  .replace(/[\x00-\x1f\x7f-\x9f]/g, '').trim();
+import { cleanText, attachmentContext, userMessageContext } from './attachments.mjs';
+export { cleanText } from './attachments.mjs';
 
-// 只把整条消息均为单个附件路径的情况当作附件，不误改普通文字中的路径。
-export function attachmentName(message) {
-  const value = String(message ?? '').trim().replace(/^"(.*)"$/, '$1');
-  if (!/^(?:[a-z]:[/\\]|\/|file:\/\/)/i.test(value)
-      || /[\r\n]/.test(value)
-      || !/\.(?:png|jpe?g|gif|webp|bmp|svg|pdf|txt|csv|docx?|xlsx?|pptx?|zip)$/i.test(value)) return undefined;
-  return value.split(/[/\\]/).at(-1);
+export function sessionContext(item) {
+  const opening = attachmentContext(item.firstMessage);
+  return {
+    request: item.firstRequest ?? opening.text,
+    latest: item.latestRequest ?? '',
+    attachments: item.attachments ?? { images: opening.images, files: opening.files, names: opening.names },
+  };
 }
 
 export function sessionTitle(item, { image = '图片', attachment = '附件' } = {}) {
-  if (cleanText(item.name)) return cleanText(item.name);
-  const file = attachmentName(item.firstMessage);
-  if (file) {
-    const isImage = /\.(?:png|jpe?g|gif|webp|bmp|svg)$/i.test(file);
-    // 剪贴板临时文件的 UUID 无助于辨认，把原路径留在详情预览。
-    if (/^pi-clipboard-[\da-f-]+\.(?:png|jpe?g|gif|webp|bmp)$/i.test(file)) return image;
-    return `${isImage ? image : attachment}: ${cleanText(file)}`;
+  const name = cleanText(item.name), named = attachmentContext(name);
+  // 路径式自动名称不覆盖有效上下文；真正的用户名称始终保留。
+  if (name && (!named.images && !named.files || named.text)) return name;
+  const context = sessionContext(item);
+  const info = context.attachments;
+  const count = info.images + info.files;
+  const label = info.files ? attachment : image;
+  const marker = count > 1 ? `${label} ×${count}` : label;
+  if (context.request) return count ? `[${marker}] ${cleanText(context.request)}` : cleanText(context.request);
+  if (count) {
+    const meaningful = info.names.filter(file => !/^pi-clipboard-[\da-f-]+\./i.test(file));
+    if (meaningful.length) return `[${marker}] ${meaningful.join(', ')}`;
+    const date = item.modified;
+    const time = date && Number.isFinite(date.getTime())
+      ? `${date.getMonth() + 1}/${date.getDate()} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}` : '';
+    return `[${marker}]${time ? ` ${time}` : ''}`;
   }
-  return cleanText(item.firstMessage) || basename(item.path, '.jsonl');
+  return name || basename(item.path, '.jsonl');
 }
 
 // 搜索文本只在加载时构造一次，供选择器在每次按键时复用。
 export function sessionSearchText(item, labels) {
-  return `${sessionTitle(item, labels)} ${item.cwd ?? ''} ${item.firstMessage ?? ''}`.toLocaleLowerCase();
+  return `${sessionTitle(item, labels)} ${item.name ?? ''} ${item.cwd ?? ''} ${item.firstMessage ?? ''} ${item.firstRequest ?? ''} ${item.latestRequest ?? ''} ${item.attachments?.names?.join(' ') ?? ''}`.toLocaleLowerCase();
 }
 
 export function selectSessions(items, { query = '', showAgents = false, sorted = false } = {}) {
@@ -49,7 +58,9 @@ export async function readEvidence(path, signal) {
   const input = createReadStream(path, { encoding: 'utf8', signal });
   const lines = createInterface({ input, crlfDelay: Infinity });
   const evidence = { initialName: undefined, calls: new Set(), header: undefined,
-    name: undefined, messageCount: 0, firstMessage: '', activity: 0 };
+    name: undefined, messageCount: 0, firstMessage: '', firstRequest: '', latestRequest: '',
+    attachments: { images: 0, files: 0, names: [] }, activity: 0 };
+  let openingSeen = false;
   try {
     for await (const line of lines) {
       signal?.throwIfAborted();
@@ -68,11 +79,17 @@ export async function readEvidence(path, signal) {
         const time = typeof message.timestamp === 'number' ? message.timestamp : Date.parse(entry.timestamp);
         if (Number.isFinite(time)) evidence.activity = Math.max(evidence.activity, time);
       }
-      if (message?.role === 'user' && !evidence.firstMessage) {
-        const content = message.content;
-        evidence.firstMessage = (typeof content === 'string' ? content :
-          Array.isArray(content) ? content.filter(b => b && typeof b === 'object'
-            && b.type === 'text' && typeof b.text === 'string').map(b => b.text).join(' ') : '').slice(0, 600);
+      if (message?.role === 'user') {
+        const context = userMessageContext(message.content);
+        if (!openingSeen) {
+          evidence.firstMessage = context.raw;
+          evidence.attachments = { images: context.images, files: context.files, names: context.names };
+          openingSeen = true;
+        }
+        if (context.text) {
+          if (!evidence.firstRequest) evidence.firstRequest = context.text.slice(0, 600);
+          evidence.latestRequest = context.text.slice(0, 600);
+        }
       }
       const details = message?.details;
       if (message?.role === 'toolResult' && message.toolName === 'Agent'

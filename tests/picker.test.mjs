@@ -191,7 +191,8 @@ test('英文界面、精确统计和选中项详情不改变会话内容', async
   assert.match(rendered, /Hide verified agents/);
   assert.match(rendered, /Showing 2 \/ 2 visible · 3 total · 1 hidden · 1 unverified/);
   assert.match(rendered, /Image/);
-  assert.match(rendered, /First message: C:\\Temp/);
+  assert.match(rendered, /Initial request: No text preview/);
+  assert.match(rendered, /Opening message: C:\\Temp/);
   assert.match(rendered, /Parent session is missing or unreadable/);
   assert.doesNotMatch(rendered, /搜索|会话管理|已隐藏|条 ·|首条消息|未核验/);
   picker.handleInput('订单');
